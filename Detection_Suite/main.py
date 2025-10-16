@@ -1,6 +1,7 @@
 import cv2
 from cv2.typing import MatLike
 import argparse
+import time
 
 from Default_vars import COLORS, KEYS
 from Detectors import Algorithm, ALGORITHMS, DEFAULT_A_VALUES
@@ -15,6 +16,7 @@ DEFAULT_VID = "../Data/Lego.mp4"
 
 COLOR_MAX = 255
 US_AREA_THRESHOLD = 30
+FPS_POS = (10, 20) 
 
 class CL_Parser():
     """
@@ -59,7 +61,6 @@ class Coordinator():
 
     def __init__(self, debug=False) -> None:
         self.debug = debug
-        self.crop_min = 30
         self.algorithm = ALGORITHMS[KEYS.ONE] # default init
         self.value = DEFAULT_A_VALUES[KEYS.ONE]
 
@@ -114,7 +115,7 @@ class Coordinator():
     def find_US_area(self, src:MatLike, gray:MatLike) -> MatLike:
         """Find the original image so only the Ultrasound scan area is left"""
         
-        _, thresh = cv2.threshold(gray, self.crop_min, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(gray, US_AREA_THRESHOLD, 255, cv2.THRESH_BINARY)
         eroded = cv2.erode(thresh, None, iterations=2) # get rid of text/lines
         contours, _ = cv2.findContours(eroded, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
         x, y, w, h = cv2.boundingRect(max(contours, key=cv2.contourArea))
@@ -133,6 +134,8 @@ class Viewer():
         self.debug = debug
         self.parser = CL_Parser()
         self.coordinator = Coordinator(self.debug)
+        self.prev_frame_time = 0
+        self.new_frame_time = 0
         self.load_data()
 
     def load_data(self):
@@ -167,6 +170,7 @@ class Viewer():
                 self.coordinator.change_algorithm(key)
             
             out = self.coordinator.manage(frame)
+            self.write_fps(out)
             cv2.imshow('Video Playback', out)
 
     def stop(self, cap:cv2.VideoCapture):
@@ -175,7 +179,18 @@ class Viewer():
 
     def pause(self):
         cv2.waitKey()
-        
+
+    def write_fps(self, img):
+        # via: https://learnopencv.com/how-to-find-frame-rate-or-frames-per-second-fps-in-opencv-python-cpp/
+        self.new_frame_time = time.time()
+        try:
+            fps = 1 / (self.new_frame_time - self.prev_frame_time)
+            fps = int(fps)
+        except:
+            fps = "x"
+        self.prev_frame_time = self.new_frame_time
+        text = f"fps: {str(fps)}"
+        cv2.putText(img, text, FPS_POS, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)    
 
 # ----- MAIN ----- #
 def main():
