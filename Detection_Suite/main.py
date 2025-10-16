@@ -4,7 +4,7 @@ import argparse
 import time
 
 from Default_vars import COLORS, KEYS
-from Detectors import Algorithm, ALGORITHMS, DEFAULT_A_VALUES
+from Detection import Algorithm, ALGORITHMS, DEFAULT_A_VALUES
 # from detectors import Hallo
 # Main Module for complete Detection Suit
 # implement algorithms in different modules
