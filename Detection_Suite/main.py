@@ -3,7 +3,7 @@ from cv2.typing import MatLike
 import argparse
 
 from Default_vars import COLORS, KEYS
-from Detectors import Algorithm, ALGORITHMS
+from Detectors import Algorithm, ALGORITHMS, DEFAULT_A_VALUES
 # from detectors import Hallo
 # Main Module for complete Detection Suit
 # implement algorithms in different modules
@@ -61,7 +61,7 @@ class Coordinator():
         self.debug = debug
         self.crop_min = 30
         self.algorithm = ALGORITHMS[KEYS.ONE] # default init
-        self.value = 50 # TODO: init value depending on detection algorithm
+        self.value = DEFAULT_A_VALUES[KEYS.ONE]
 
     def manage(self, src:MatLike) -> MatLike:
         """Manage all processing that is happening to an image and return it"""
@@ -105,6 +105,7 @@ class Coordinator():
         """Switch between the implemented algorithms using the number keys 0-9 (not numpad)"""
         try:
             self.algorithm = ALGORITHMS[key]
+            self.value = DEFAULT_A_VALUES[key]
         except:
             print("[ERR] Nothing algorithm here yet")
     
