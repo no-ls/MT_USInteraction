@@ -5,10 +5,6 @@ import time
 
 from Default_vars import COLORS, KEYS
 from Detection import Algorithm, ALGORITHMS, DEFAULT_A_VALUES
-# from detectors import Hallo
-# Main Module for complete Detection Suit
-# implement algorithms in different modules
-# evtl. implement quality metrics for comparing
 
 WINDOW = "Detection Suit"
 DEFAULT_IMG = "../Data/Agar1.png"
@@ -148,9 +144,19 @@ class Viewer():
         # evtl. open with mouse after running program (-> from tkinter import filedialog)
 
     def show_img(self, frame:MatLike) -> None:
-        out = self.coordinator.manage(frame)
-        cv2.imshow(WINDOW, out)
-        cv2.waitKey(0)
+        while True:
+            out = self.coordinator.manage(frame)
+            key = cv2.waitKeyEx(1)
+            if key == ord("q") or key == KEYS.ESC:
+                break
+            elif key == ord("s"):
+                self.save(out)
+            elif key == KEYS.UP_ARROW or key == KEYS.DOWN_ARROW:
+                self.coordinator.change_value(key)
+            elif key >= KEYS.ZERO and key <= KEYS.NINE:
+                self.coordinator.change_algorithm(key)
+            cv2.imshow(WINDOW, out) 
+        cv2.destroyAllWindows()
 
     def show_video(self, cap:cv2.VideoCapture) -> None:
         while cap.isOpened():
@@ -158,10 +164,15 @@ class Viewer():
             if not ret:
                 break
 
+            out = self.coordinator.manage(frame)
+            self.write_fps(out)
+
             key = cv2.waitKeyEx(25)
             # if key != -1: print(key)
             if key == ord("q") or key == KEYS.ESC:
                 self.stop(cap)
+            elif key == ord("s"):
+                self.save(out)
             elif key == KEYS.SPACE:
                 self.pause()
             elif key == KEYS.UP_ARROW or key == KEYS.DOWN_ARROW:
@@ -169,10 +180,15 @@ class Viewer():
             elif key >= KEYS.ZERO and key <= KEYS.NINE:
                 self.coordinator.change_algorithm(key)
             
-            out = self.coordinator.manage(frame)
-            self.write_fps(out)
             cv2.imshow('Video Playback', out)
 
+    def save(self, img:MatLike):
+        try:
+            cv2.imwrite(f"../Data/out/out_{time.time()}.png", img)
+            print("saved image")
+        except:
+            print("[ERR] couldn't save")
+    
     def stop(self, cap:cv2.VideoCapture):
         cv2.destroyAllWindows()
         cap.release()

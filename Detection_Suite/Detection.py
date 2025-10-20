@@ -28,7 +28,7 @@ class Algorithm():
         cv2.putText(img, text, NAME_POS, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)
 
     @abstractmethod
-    def do_algorithm(self):
+    def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
         pass
 
 
@@ -48,7 +48,9 @@ class Threshold(Algorithm):
         return thresh
     
 class K_Means(Algorithm):
-    """A k-means detector"""
+    """A k-means detector.
+    via: https://docs.opencv.org/4.x/d1/d5c/tutorial_py_kmeans_opencv.html
+    """
 
     def do_algorithm(self, value:int, img:MatLike, gray:MatLike) -> MatLike:
         """returns the segmented image"""
@@ -69,15 +71,34 @@ class K_Means(Algorithm):
         
         return res2
     
+class Graph_Cut(Algorithm):
+    """via: https://docs.opencv.org/4.x/d8/d83/tutorial_py_grabcut.html"""
+
+    def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
+        mask = np.zeros(img.shape[:2], np.uint8)
+
+        bgdModel = np.zeros((1, 65), np.float64)
+        fgdModel = np.zeros((1, 65), np.float64)
+
+        rect = (150, 150, 300, 300) # TODO find
+        cv2.grabCut(img, mask, rect, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_RECT)
+
+        mask2 = np.where((mask==2)|(mask==0), 0, 1).astype("uint8")
+        img = img*mask2[:,:,np.newaxis]
+        return img
+        # test with "manually" selected box
+        pass
 
 # ----- LIST ----- #
 
 ALGORITHMS = {
     KEYS.ONE: Threshold(),
     KEYS.TWO: K_Means(),
+    KEYS.THREE: Graph_Cut(),
 }
 
 DEFAULT_A_VALUES = {
     KEYS.ONE: 50,
     KEYS.TWO: 2,
+    KEYS.THREE: 0,
 }
