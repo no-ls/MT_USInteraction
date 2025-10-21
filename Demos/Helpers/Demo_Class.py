@@ -8,6 +8,7 @@ FPS_POS = (10, 20)
 
 class Demo():
     def __init__(self) -> None:
+        print("[DEMO] -", self.get_name())
         pass
 
     def get_name(self):
@@ -24,7 +25,6 @@ class Demo():
         text = f"fps: {str(fps)}"
         cv2.putText(frame, text, FPS_POS, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)    
 
-    
     @abstractmethod
     def do(self, frame:MatLike, gray:MatLike)-> MatLike:
         """Abstract Method to be overridden by the specific demos."""

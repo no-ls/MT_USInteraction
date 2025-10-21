@@ -13,7 +13,7 @@ BBOX_MIN_H = 10
 
 class Painter(Demo):
     def __init__(self) -> None:
-        print("[DEMO] -", self.get_name())
+        super().__init__()
         self.lines = []
 
     def do(self, frame:MatLike, gray:MatLike)-> MatLike: 
