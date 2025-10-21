@@ -36,6 +36,7 @@ def find_US_area(gray:MatLike) -> MatLike:
 class Player():
     def __init__(self, demo:Demo) -> None:
         self.demo = demo
+        self.area = None
 
     def start_player(self):
         cap = self.load_input()
@@ -59,10 +60,8 @@ class Player():
                 break
 
             frame, gray = self.prepare_video(frame)
+            out = self.do_demo(frame, gray)
 
-            self.do_demo()
-
-            out = frame
             cv2.imshow(WINDOW, out)
         
         cv2.destroyAllWindows()
@@ -72,8 +71,8 @@ class Player():
         """Rotate the video and find the US area"""
         src = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
-        area = find_US_area(gray)
+        self.area = find_US_area(gray)
         return (src, gray)
     
-    def do_demo(self):
-        self.demo.do()
+    def do_demo(self, frame:MatLike, gray:MatLike):
+        return self.demo.do(frame, gray)
