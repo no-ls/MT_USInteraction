@@ -184,7 +184,7 @@ class Viewer():
 
     def save(self, img:MatLike):
         try:
-            cv2.imwrite(f"../Data/out/out_{time.time()}.png", img)
+            cv2.imwrite(f"../Data/Out/out_{time.time()}.png", img)
             print("saved image")
         except:
             print("[ERR] couldn't save")

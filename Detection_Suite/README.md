@@ -15,15 +15,14 @@
 
 
 ## Notes
-before abandonment...
 
-### Algorithms to Compare
 - [x] thresholding (+ contour detection)
   - works without initialization
   - good fps ~20
 - [x] k-means and/or fuzzy C-means
   - even with k=2 (you don't really need much more) very slow: fps ~6
   - gets contours pretty well
+  - -> look into: color quantization
 - [ ] graph cuts[^1] ([grab cut](https://docs.opencv.org/4.x/d8/d83/tutorial_py_grabcut.html))
   - requires initialization (does not work yet), can probably be adjusted live
   - bad performance -> would prob. require GPU use with CUDA (make with [install](https://coderivers.org/blog/install-opencv-python-with-cuda/))
@@ -51,6 +50,7 @@ before abandonment...
   - SAM-Everything (thing) segments areas pretty good, but does get shadowing behind object
     - does take a couple of seconds -> maybe speed up by pre-masking
   - SAM-Box (thing) does get the object well, but does get as much of the shadow behind as the box would allow
+  - SAM2 can do video segmentation with box or marker
 - [ ] [Watershed](https://docs.opencv.org/4.x/d3/db4/tutorial_py_watershed.html)[^1] ?
   - requires setting markers
   - Test/watershed.py
