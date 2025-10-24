@@ -83,12 +83,12 @@ class K_Means(Algorithm):
         res2 = res.reshape((img.shape))
 
         # upsample for display
-        rows, cols, _channels = map(int, res2.shape)
+        rows, cols, _channels = map(int, res2.shape())
         res2 = cv2.pyrUp(res2, dstsize=(resample * cols, resample * rows))
         
         return res2
 # maybe alternative: https://stackoverflow.com/questions/49710006/fast-color-quantization-in-opencv
-    
+
 class Watershed(Algorithm):
     """via: dev.to/jarvissan22/python-cv2-image-segmentation-canny-edges-watershed-and-k-means-methods-18l0"""
 
@@ -157,6 +157,23 @@ class Pyr_Mean_Shift(Algorithm):
     def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
         img = cv2.pyrMeanShiftFiltering(img,sp=5, sr=30)
         return img
+    
+class Brightest_Spot(Algorithm):
+    def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
+        img = cv2.GaussianBlur(img, (7,7), 0)
+        (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(gray)
+        cv2.circle(img, maxLoc, 5, COLORS.BLUE, 2)
+        cv2.putText(img, " brightest", maxLoc, 1, 1, COLORS.BLUE, 1)
+
+        _, thresh = cv2.threshold(gray, value, 255, cv2.THRESH_BINARY)
+        moments = cv2.moments(thresh)
+        cx = int(moments['m10'] / moments['m00'])
+        cy = int(moments['m01'] / moments['m00'])
+
+        cv2.circle(img, (cx, cy), 5, COLORS.RED, 2)
+        cv2.putText(img, " moment", (cx, cy), 1, 1, COLORS.RED, 1)
+
+        return img
 
 # doesn't work
 class Graph_Cut(Algorithm):
@@ -185,15 +202,16 @@ ALGORITHMS = {
     KEYS.THREE: Color_Quantization(),
     KEYS.FOUR: LUT(),
     KEYS.FIVE: Pyr_Mean_Shift(),
-    KEYS.SIX: Watershed(),
+    KEYS.SIX: Brightest_Spot(),
+    KEYS.SEVEN: Watershed()
 }
 
 DEFAULT_A_VALUES = {
     KEYS.ONE: 50,
     KEYS.TWO: 2,
     KEYS.THREE: 2,
-    KEYS.FOUR: 80,
+    KEYS.FOUR: 3,
     KEYS.FIVE: 30,
-    KEYS.SIX: 0,
+    KEYS.SIX: 50,
     KEYS.SEVEN: 0,
 }

@@ -2,6 +2,7 @@ import cv2
 from cv2.typing import MatLike
 import argparse
 import time
+import numpy as np
 
 from Default_vars import COLORS, KEYS
 from Detection import Algorithm, ALGORITHMS, DEFAULT_A_VALUES
@@ -11,7 +12,8 @@ DEFAULT_IMG = "../Data/Agar1.png"
 DEFAULT_VID = "../Data/Lego.mp4"
 
 COLOR_MAX = 255
-US_AREA_THRESHOLD = 30
+US_AREA_THRESHOLD = 20
+PROBE_ARTIFACT = 10
 FPS_POS = (10, 20) 
 
 class CL_Parser():
@@ -74,6 +76,7 @@ class Coordinator():
         src = cv2.rotate(src, cv2.ROTATE_90_CLOCKWISE)
         gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
         img = self.find_US_area(src, gray)
+        gray = self.mask_US_area(gray)
         return (img, gray)
     
     def split_screen(self, show:bool, src:MatLike, out:MatLike) -> MatLike:
@@ -121,6 +124,18 @@ class Coordinator():
 
         self.area = US_Area(x, y, w, h)
         return src
+
+    def mask_US_area(self, img):
+        """Return a copy of the image that is masked to the US-Area (rest is black)"""
+        black = np.zeros((img.shape[0], img.shape[1], 3), np.uint8)
+        black = cv2.cvtColor(black, cv2.COLOR_BGR2GRAY)
+        area = self.area
+        cv2.rectangle(black, (area.x, area.y), (area.x+area.w, area.y+area.h), COLORS.WHITE, -1)
+        cv2.rectangle(black, (area.x, area.y), (area.x+area.w, area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
+        # -> remove the very top of the area, as there are a lot of probe artifacts and nothing else
+        
+        _, mask = cv2.threshold(black, 127, 255, 0)
+        return cv2.bitwise_and(img, img, mask=mask)
 
 
 class Viewer():

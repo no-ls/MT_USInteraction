@@ -9,7 +9,7 @@ VIDEO_ID = 2 # video id for the virtual camera
 DEFAULT_VID = "../Data/Finger1.mp4"
 
 WINDOW = "Painter"
-US_AREA_THRESHOLD = 30
+US_AREA_THRESHOLD = 20
 PROBE_ARTIFACT = 10
 
 # ----- HELPERS ----- #
