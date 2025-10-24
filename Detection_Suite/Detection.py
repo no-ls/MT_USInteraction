@@ -83,7 +83,7 @@ class K_Means(Algorithm):
         res2 = res.reshape((img.shape))
 
         # upsample for display
-        rows, cols, _channels = map(int, res2.shape())
+        rows, cols, _channels = map(int, res2.shape)
         res2 = cv2.pyrUp(res2, dstsize=(resample * cols, resample * rows))
         
         return res2
@@ -94,7 +94,7 @@ class Watershed(Algorithm):
 
     def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
         # binary image inversion, this  ensures that foreground objects are white, and the background is black.
-        _, thresh = cv2.threshold(gray, 40, 255, cv2.THRESH_BINARY_INV  | cv2.THRESH_OTSU)
+        _, thresh = cv2.threshold(gray, 40, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
         # Noise removal using morphological opening, this reduced segmentation artifacts 
         kernel = np.ones((3, 3), np.uint8)
