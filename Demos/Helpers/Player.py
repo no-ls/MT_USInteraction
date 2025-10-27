@@ -1,4 +1,6 @@
+import os
 import cv2
+import time
 import numpy as np
 from abc import abstractmethod
 from cv2.typing import MatLike
@@ -7,6 +9,7 @@ from .Demo_Class import Demo
 
 VIDEO_ID = 2 # video id for the virtual camera
 DEFAULT_VID = "../Data/Finger1.mp4"
+DEFAULT_OUT_DIR = "../Data/Out"
 
 WINDOW = "Painter"
 US_AREA_THRESHOLD = 20
@@ -73,14 +76,20 @@ class Player():
             ret, frame = cap.read()
             if not ret:
                 break
-
-            key = cv2.waitKeyEx(25)
-            if key == ord("q") or key == KEYS.ESC:
-                break
-
+            
+            # DEMO output
             frame, prepped = self.prepare_video(frame)
             out = self.do_demo(frame, prepped)
 
+            # KEYBOARD interactions
+            key = cv2.waitKeyEx(25)
+            if key == ord("q") or key == KEYS.ESC:
+                break
+            if key == ord("s"):
+                self.save_frame(out)
+            # TODO add more interaction (to interactively change variables for demos)
+
+            # OUT
             cv2.imshow(WINDOW, out)
         
         cv2.destroyAllWindows()
@@ -96,3 +105,14 @@ class Player():
     
     def do_demo(self, frame:MatLike, gray:MatLike):
         return self.demo.do(frame, gray)
+    
+    def save_frame(self, frame:MatLike):
+        if not os.path.isdir(DEFAULT_OUT_DIR):
+            os.makedirs(DEFAULT_OUT_DIR)
+
+        try:
+            filepath = f"{DEFAULT_OUT_DIR}/out-{self.demo.get_name()}_{time.time()}.png"
+            cv2.imwrite(filepath, frame)
+            print("saved image @", filepath)
+        except:
+            print("[ERR] couldn't save")
