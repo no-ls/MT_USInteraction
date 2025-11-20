@@ -23,9 +23,23 @@
 
 
 ## Notes
-- [ ] Low pass filter
-- [ ] Different smoothing filters
-- [x] Different threshold (adaptive, otsu)
+- [ ] Try Denoising
+  - see [Fast](https://fast-imaging.github.io/python-tutorial-ultrasound.html#autotoc_md159) for US image processing  
+  - non local means filter
+    - doesn't do much with recommended values, except tank fps
+    - 20, 7, 21 ~ 1-2 fps
+    - 20, 7, 7  ~ 15 fps
+- [ ] Try mixing algorithms
+  - [ ] Opening/Erode with color quant
+  - [ ] Closing/Dilate with optical flow
+  - [ ] Blur with color quant
+- [x] Try different pre processing steps
+  - [x] Low pass filter
+  - [x] Different smoothing filters
+  - [x] Morphological operations
+    - Opening and Erode help with water speckle noise
+    - Closing and Dilate amplify it
+- [x] Different thresholds (adaptive, otsu)
   - -> not that great
   - Adaptive Thresholds
     - Mean seems noisier, than Gaussian
@@ -36,6 +50,8 @@
   - Otsu
     - with pre-blur: bad -> very big "shapes", often pure white
     - without blur: similar, maybe a little better
+  - Binary
+    - better, given the correct values
 - [x] thresholding (+ contour detection)
   - works without initialization
   - good fps ~20

@@ -285,7 +285,109 @@ class Graph_Cut(Algorithm):
         return img
         # test with "manually" selected box
 
+class Pre_Processing(Algorithm):
+    """Several preprocessing techniques"""
 
+    def write(self, img, text):
+        pos = (300, 40)
+        cv2.putText(img, text, pos, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)
+
+    def smooth(self, img): # lowpass
+        kernel = np.ones((5,5), np.float32) / 25
+        img = cv2.filter2D(img, -1, kernel)
+        self.write(img, "smooth (filter2D)")
+        return img
+
+    def dilate(self, img):
+        kernel = np.ones((5,5), np.uint8)
+        img = cv2.dilate(img, kernel, iterations=1)
+        self.write(img, "dilate")
+        return img
+
+    def erode(self, img):
+        kernel = np.ones((5,5), np.uint8)
+        img = cv2.erode(img, kernel, iterations=1)
+        self.write(img, "erode")
+        return img
+
+    def opening(self, img):
+        kernel = np.ones((5,5), np.uint8)
+        img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
+        self.write(img, "opening")
+        return img        
+
+    def closing(self, img):
+        kernel = np.ones((5,5), np.uint8)
+        img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)        
+        self.write(img, "closing")
+        return img
+
+    def downsample(self, img):
+        resample = 2
+        rows, cols, _channels = map(int, img.shape)
+        img = cv2.pyrDown(img, dstsize=(cols // resample, rows // resample))
+        
+        # upsample for display
+        rows, cols, _channels = map(int, img.shape)
+        img = cv2.pyrUp(img, dstsize=(resample * cols, resample * rows))
+        self.write(img, "down sample")        
+        return img
+    
+    def highpass(self, img):
+        """via: https://pythonexamples.org/python-opencv-image-filter-convolution-cv2-filter2d/"""
+        kernel = np.array([[0.0, -1.0, 0.0], 
+                   [-1.0, 5.0, -1.0],
+                   [0.0, -1.0, 0.0]])
+        kernel = kernel/(np.sum(kernel) if np.sum(kernel) != 0 else 1)
+        img = cv2.filter2D(img, -1, kernel)
+        self.write(img, "highpass")        
+        return img
+
+    def denoise(self, img):
+        """variable explanation: https://stackoverflow.com/a/37921901"""
+        h = 20 # odd, higher = less detail less noise
+        templateWindowSize = 7 # odd
+        searchWindowSize = 5 # higher value affects time
+        img = cv2.fastNlMeansDenoising(img, None, h, templateWindowSize, searchWindowSize)
+        self.write(img, "non-local means denoise")            
+        return img
+    
+    def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
+        kernel = (5, 5)
+
+        match value:
+            case 0:
+                img = cv2.blur(img, kernel)
+                self.write(img, "blur")
+            case 1:
+                img = cv2.GaussianBlur(img, kernel, 0)
+                self.write(img, "GaussianBlur")
+            case 2:
+                img = cv2.medianBlur(img, 5)
+                self.write(img, "medianBlur")
+            case 3:
+                img = cv2.bilateralFilter(img, 9, 75, 75)
+                self.write(img, "bilateralFilter")
+            case 4:
+                img = self.smooth(img)
+            case 5:
+                img = self.dilate(img)
+            case 6:
+                img = self.erode(img)
+            case 7:
+                img = self.closing(img)
+            case 8:
+                img = self.opening(img)
+            case 9:
+                img = self.downsample(img)
+            case 10: 
+                img = self.highpass(img)
+            case 11:
+                img = self.denoise(gray)
+            case _:
+                self.write(img, "none")
+        
+        return img
 
 # ----- LIST ----- #
 
@@ -298,6 +400,7 @@ ALGORITHMS = {
     KEYS.SIX: Brightest_Spot(),
     KEYS.SEVEN: Watershed(),
     KEYS.EIGHT: Optical_Flow(),
+    KEYS.NINE: Pre_Processing()
 }
 
 DEFAULT_A_VALUES = {
@@ -309,4 +412,5 @@ DEFAULT_A_VALUES = {
     KEYS.SIX: 50,
     KEYS.SEVEN: 0,
     KEYS.EIGHT: 1,
+    KEYS.NINE: 0,
 }
