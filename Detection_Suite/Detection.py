@@ -31,17 +31,37 @@ class Algorithm():
     def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
         pass
 
-
 # ----- CHILD CLASSES ---- #
 
 class Threshold(Algorithm):
     """A simple threshold operation for detection"""
 
+    def do_threshold(self, gray, value):
+        _, thresh = cv2.threshold(gray, value, 255, cv2.THRESH_BINARY)
+        return thresh
+    
+    def do_adaptive_threshold(self, gray, value):
+        # TODO try preblur + changing vars
+        gray = cv2.GaussianBlur(gray, (5,15), 0)
+        blockSize = 11
+        C = 2
+        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,blockSize,C)
+        # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,blockSize,C)
+        return thresh
+    
+    def do_Otsu(self, gray, value):
+        # blur = cv2.GaussianBlur(gray, (5,5), 0)
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        return thresh
+
     def do_algorithm(self, value:int, img:MatLike, gray:MatLike) -> MatLike:
         """returns the thresholded image"""
-        # binary threshold
-        _, thresh = cv2.threshold(gray, value, 255, cv2.THRESH_BINARY)
-        
+
+        # THRESHOLDS        
+        thresh = self.do_threshold(gray, value)
+        # thresh = self.do_adaptive_threshold(gray, value)
+        # thresh = self.do_Otsu(gray, value)
+
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
         cv2.drawContours(img, contours, -1, COLORS.RED, 1)
 
@@ -264,6 +284,7 @@ class Graph_Cut(Algorithm):
         img = img*mask2[:,:,np.newaxis]
         return img
         # test with "manually" selected box
+
 
 
 # ----- LIST ----- #
