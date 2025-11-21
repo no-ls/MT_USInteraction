@@ -4,7 +4,7 @@ import argparse
 import time
 import numpy as np
 
-from Default_vars import COLORS, KEYS
+from Default_vars import COLORS, KEYS, ALGORITHM_KEYS
 from Detection import Algorithm, ALGORITHMS, DEFAULT_A_VALUES
 
 WINDOW = "Detection Suit"
@@ -59,8 +59,8 @@ class Coordinator():
 
     def __init__(self, debug=False) -> None:
         self.debug = debug
-        self.algorithm = ALGORITHMS[KEYS.ONE] # default init
-        self.value = DEFAULT_A_VALUES[KEYS.ONE]
+        self.algorithm = ALGORITHMS[ALGORITHM_KEYS.ONE] # default init
+        self.value = DEFAULT_A_VALUES[ALGORITHM_KEYS.ONE]
 
     def manage(self, src:MatLike) -> MatLike:
         """Manage all processing that is happening to an image and return it"""
@@ -168,12 +168,13 @@ class Viewer():
                 self.save(out)
             elif key == KEYS.UP_ARROW or key == KEYS.DOWN_ARROW:
                 self.coordinator.change_value(key)
-            elif key >= KEYS.ZERO and key <= KEYS.NINE:
+            elif key in vars(ALGORITHM_KEYS).values():
                 self.coordinator.change_algorithm(key)
             cv2.imshow(WINDOW, out) 
         cv2.destroyAllWindows()
 
     def show_video(self, cap:cv2.VideoCapture) -> None:
+        i = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -192,8 +193,15 @@ class Viewer():
                 self.pause()
             elif key == KEYS.UP_ARROW or key == KEYS.DOWN_ARROW:
                 self.coordinator.change_value(key)
-            elif key >= KEYS.ZERO and key <= KEYS.NINE:
+            elif key in vars(ALGORITHM_KEYS).values():
                 self.coordinator.change_algorithm(key)
+
+            # for better comparison always save at the same time
+            same_save = False
+            if same_save:
+                if (i == 120):
+                    self.save(out)
+                i += 1            
             
             cv2.imshow('Video Playback', out)
 
