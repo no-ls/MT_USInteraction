@@ -9,8 +9,10 @@
   - e.g: `py .\main.py -src ../Data/stressball.mp4`
 - use number keys, e.g. <kbd>1</kbd> for threshold, to switch between algorithms
 - use <kbd>arrow up</kbd> and <kbd>arrow down</kbd> to change the values used in the algorithm (e.g. threshold value)
+  - for some algorithms this instead changes configurations
 - <kbd>q</kbd> or <kbd>esc</kbd> to quit
 - <kbd>s</kbd> to save an image/frame
+
 
 ### Add Algorithms
 - go to `Detection.py`
@@ -19,20 +21,36 @@
   - in it return the image you want to see later
 - got to the end of `Detection.py`
   - add/replace your class in the lists 
-  - currently only detects number keys (0-9)
-
 
 ## Notes
-- [ ] Try Denoising
-  - see [Fast](https://fast-imaging.github.io/python-tutorial-ultrasound.html#autotoc_md159) for US image processing  
-  - non local means filter
-    - doesn't do much with recommended values, except tank fps
-    - 20, 7, 21 ~ 1-2 fps
-    - 20, 7, 7  ~ 15 fps
+- [x] Try Denoising with non local means
+  - [?] try [Fast](https://fast-imaging.github.io/python-tutorial-ultrasound.html#autotoc_md159) for US image processing  
+  - doesn't do much with recommended values, except tank fps
+  - 20, 7, 21 ~ 1-2 fps
+  - 20, 7, 7  ~ 15 fps (okay, not sure how much better to regular blur)
 - [ ] Try mixing algorithms
-  - [ ] Opening/Erode with color quant
+  - [x] Opening/Erode with color quant
+      - fps is fine ~ 20 fps
+      - Opening seems better than erode
+      - color quant above 9 does nothing, blow a little low
+      - does get rid of some of the water bubbles
   - [ ] Closing/Dilate with optical flow
-  - [ ] Blur with color quant
+  - [x] Preprocessing with color quant
+    - Comparison
+      - blur, Gaussian blur, median blur -> very similar (maybe higher values) ~ 20 fps
+      - bilateral  = very smoothed shapes, gets of most noise, ~ 15 fps
+      - closing = very blocky, ~ 20 fps
+      - dilate = very blocky, ballooned, ~ 20 fps
+      - down sample = similar to bilateral, a bit less smooth, ~ 20 fps
+      - erode = blocky, but gets rid of a lot, ~ 22 fps
+      - opening = similar to erode, with some more volume so a litte better, ~ 20 fps
+      - high pass = grainy, increases contrast, ~ fps 16
+      - non-local means = similar to bilateral, ~ 17 fps
+      - smooth = the same as non-local, ~ 20 fps
+    - -> smooth (filter2D) very similar/same to smooth, bilateral, non-local, but better fps
+    - -> erode gets rid of the most noise over all, but kinda blocky (maybe different shape)
+  - [ ] blur + erode + color-quant
+    - erode creates additional edges, due to the blocky shapes
 - [x] Try different pre processing steps
   - [x] Low pass filter
   - [x] Different smoothing filters
