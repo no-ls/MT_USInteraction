@@ -1,6 +1,17 @@
 class KEYS:
     ESC         = 27
     SPACE       = 32
+    LEFT_ARROW  = 2424832
+    UP_ARROW    = 2490368
+    RIGHT_ARROW = 2555904
+    DOWN_ARROW  = 2621440
+
+class ALGORITHM_KEYS:
+    W           = 119
+    E           = 101
+    R           = 114
+    T           = 116
+    Z           = 122
     ZERO        = 48
     ONE         = 49
     TWO         = 50
@@ -11,10 +22,6 @@ class KEYS:
     SEVEN       = 55
     EIGHT       = 56
     NINE        = 57
-    LEFT_ARROW  = 2424832
-    UP_ARROW    = 2490368
-    RIGHT_ARROW = 2555904
-    DOWN_ARROW  = 2621440
 
 class COLORS:
     WHITE   = (255, 255, 255)
