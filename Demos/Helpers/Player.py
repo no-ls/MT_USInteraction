@@ -50,7 +50,6 @@ class US_Area():
         # ROI = image[y:y+h, x:x+w] (https://stackoverflow.com/a/58177717) 
 
 
-
 # ----- PLAYER ----- # 
 
 class Player():
@@ -87,7 +86,6 @@ class Player():
                 break
             if key == ord("s"):
                 self.save_frame(out)
-            # TODO add more interaction (to interactively change variables for demos)
 
             # OUT
             cv2.imshow(WINDOW, out)
@@ -113,6 +111,6 @@ class Player():
         try:
             filepath = f"{DEFAULT_OUT_DIR}/out-{self.demo.get_name()}_{time.time()}.png"
             cv2.imwrite(filepath, frame)
-            print("saved image @", filepath)
+            print("[INFO] saved image @", filepath)
         except:
             print("[ERR] couldn't save")

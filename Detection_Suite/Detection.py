@@ -1,10 +1,11 @@
 from abc import abstractmethod
 import cv2
 from cv2.typing import MatLike
-from Default_vars import COLORS, KEYS
+from Default_vars import COLORS, ALGORITHM_KEYS
 import numpy as np
 
-NAME_POS = (10, 40)
+NAME_POSITION = (10, 40)
+ALT_TEXT_POSITION = (300, 40)
 TEXT_OFFSET = 20
 
 # ----- PARENT ----- #
@@ -25,7 +26,12 @@ class Algorithm():
         """Write info about the current algorithm on the screen"""
         name = self.__class__.__name__
         text = f"{name} - {value}"
-        cv2.putText(img, text, NAME_POS, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)
+        cv2.putText(img, text, NAME_POSITION, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)
+
+    def write(self, img, text, pos=ALT_TEXT_POSITION):
+        """Write additional text on an image"""
+        cv2.putText(img, text, pos, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)
+
 
     @abstractmethod
     def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
@@ -288,10 +294,6 @@ class Graph_Cut(Algorithm):
 class Pre_Processing(Algorithm):
     """Several preprocessing techniques"""
 
-    def write(self, img, text):
-        pos = (300, 40)
-        cv2.putText(img, text, pos, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)
-
     def smooth(self, img): # lowpass
         kernel = np.ones((5,5), np.float32) / 25
         img = cv2.filter2D(img, -1, kernel)
@@ -305,7 +307,10 @@ class Pre_Processing(Algorithm):
         return img
 
     def erode(self, img):
-        kernel = np.ones((5,5), np.uint8)
+        size = (5,5)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, size)
+        # TODO try diff. kernel shapes
+        # kernel = np.ones((5,5), np.uint8)
         img = cv2.erode(img, kernel, iterations=1)
         self.write(img, "erode")
         return img
@@ -388,29 +393,80 @@ class Pre_Processing(Algorithm):
                 self.write(img, "none")
         
         return img
+    
+class Mix_Algorithms(Algorithm):
+    def __init__(self):
+        self.quant = Color_Quantization()
+        self.pre = Pre_Processing()
+
+    def mix_morph_color_quant(self, value, img, gray):
+        """Mix morphological operations with color Quantization"""
+
+        # Morphological Operation
+        img = self.pre.opening(img)
+        # img = self.pre.erode(img)
+
+        # Color Quantization
+        img = self.quant.do_algorithm(value, img, gray)
+
+        self.write(img, "morph + color quant", (40, 40))
+        return img
+    
+    def mix_pre_color_quant(self, value, img, gray):
+        num = 6
+        img = self.pre.do_algorithm(value, img, gray)
+        if value == 11: # uses grayscale
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        img = self.quant.do_algorithm(num, img, gray)
+        self.write(img, f"Quant {num} colors", (40, 60))
+        return img
+
+    def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
+        # img = self.mix_morph_color_quant(value, img, gray)
+        img = self.mix_pre_color_quant(value, img, gray)
+        return img
+
+class Blur_Mix(Algorithm):
+    def __init__(self):
+        self.pre = Pre_Processing()
+        self.quant = Color_Quantization()
+
+    def blur_erode_quant(self, value, img, gray):
+        img = self.pre.do_algorithm(value, img, gray)
+        img = self.pre.erode(img)
+        img = self.quant.do_algorithm(6, img, gray)
+        return img
+
+    def do_algorithm(self, value:int, img:MatLike, gray:MatLike):
+        img = self.blur_erode_quant(value, img, gray)
+        return img
 
 # ----- LIST ----- #
 
 ALGORITHMS = {
-    KEYS.ONE: Threshold(),
-    KEYS.TWO: K_Means(),
-    KEYS.THREE: Color_Quantization(),
-    KEYS.FOUR: LUT(),
-    KEYS.FIVE: Pyr_Mean_Shift(),
-    KEYS.SIX: Brightest_Spot(),
-    KEYS.SEVEN: Watershed(),
-    KEYS.EIGHT: Optical_Flow(),
-    KEYS.NINE: Pre_Processing()
+    ALGORITHM_KEYS.ONE: Threshold(),
+    ALGORITHM_KEYS.TWO: K_Means(),
+    ALGORITHM_KEYS.THREE: Color_Quantization(),
+    ALGORITHM_KEYS.FOUR: LUT(),
+    ALGORITHM_KEYS.FIVE: Pyr_Mean_Shift(),
+    ALGORITHM_KEYS.SIX: Brightest_Spot(),
+    ALGORITHM_KEYS.SEVEN: Watershed(),
+    ALGORITHM_KEYS.EIGHT: Optical_Flow(),
+    ALGORITHM_KEYS.NINE: Pre_Processing(),
+    ALGORITHM_KEYS.W: Mix_Algorithms(),
+    ALGORITHM_KEYS.E: Blur_Mix(),
 }
 
 DEFAULT_A_VALUES = {
-    KEYS.ONE: 50,
-    KEYS.TWO: 2,
-    KEYS.THREE: 2,
-    KEYS.FOUR: 3,
-    KEYS.FIVE: 30,
-    KEYS.SIX: 50,
-    KEYS.SEVEN: 0,
-    KEYS.EIGHT: 1,
-    KEYS.NINE: 0,
+    ALGORITHM_KEYS.ONE: 50,
+    ALGORITHM_KEYS.TWO: 2,
+    ALGORITHM_KEYS.THREE: 2,
+    ALGORITHM_KEYS.FOUR: 3,
+    ALGORITHM_KEYS.FIVE: 30,
+    ALGORITHM_KEYS.SIX: 50,
+    ALGORITHM_KEYS.SEVEN: 0,
+    ALGORITHM_KEYS.EIGHT: 1,
+    ALGORITHM_KEYS.NINE: 0,
+    ALGORITHM_KEYS.W: 0,
+    ALGORITHM_KEYS.E: 0,
 }
