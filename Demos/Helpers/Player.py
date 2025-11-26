@@ -11,7 +11,10 @@ VIDEO_ID = 2 # video id for the virtual camera
 DEFAULT_VID = "../Data/Finger1.mp4"
 DEFAULT_OUT_DIR = "../Data/Out"
 
-WINDOW = "Painter"
+WINDOW = "Demos"
+TRACKBAR = "Input"
+TRACKBAR_MIN = 0
+TRACKBAR_MAX = 255
 US_AREA_THRESHOLD = 20
 PROBE_ARTIFACT = 10
 
@@ -72,6 +75,11 @@ class Player():
         return cap
     
     def play_video(self, cap:cv2.VideoCapture):
+
+        cv2.namedWindow(WINDOW)
+        cv2.createTrackbar(self.demo.get_slider_name(), WINDOW, self.demo.slider_val,
+                            TRACKBAR_MAX, self.demo.set_slider_input)
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -87,6 +95,8 @@ class Player():
                 break
             if key == ord("s"):
                 self.save_frame(out)
+            if key == ord("d"):
+                self.demo.toggle_debug()
             # TODO add more interaction (to interactively change variables for demos)
 
             # OUT
