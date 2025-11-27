@@ -64,16 +64,39 @@ class Player():
         self.area = US_Area()
 
     def start_player(self):
-        cap = self.load_input()
-        self.play_video(cap)
-
-    def load_input(self) -> cv2.VideoCapture:
         cap = cv2.VideoCapture(VIDEO_ID)
         if not cap.isOpened():
-            print("[INFO] - could not find a stream, will use video")
-            cap = cv2.VideoCapture(self.video)
-        return cap
+            if ".mp4" in self.video:
+                print("[INFO] - could not find a stream, will use video")
+                cap = cv2.VideoCapture(self.video)
+                self.play_video(cap)
+            else:
+                print("[INFO] - found image")
+                frame = cv2.imread(self.video)
+                self.show_img(frame)
     
+    def show_img(self, frame:MatLike)-> None:
+        cv2.namedWindow(WINDOW)
+        cv2.createTrackbar(self.demo.get_slider_name(), WINDOW, self.demo.slider_value,
+                            self.demo.slider_max, self.demo.set_slider_input)
+        
+        frame, prepped = self.prepare_video(frame)
+        while True:
+            out = self.do_demo(frame, prepped)
+
+            # KEYBOARD interactions
+            key = cv2.waitKeyEx(25)
+            if key == ord("q") or key == KEYS.ESC:
+                break
+            if key == ord("s"):
+                self.save_frame(out)
+            if key == ord("d"):
+                pass
+                # self.demo.toggle_debug()
+            cv2.imshow(WINDOW, out) 
+        cv2.destroyAllWindows()
+    
+
     def play_video(self, cap:cv2.VideoCapture):
 
         cv2.namedWindow(WINDOW)
