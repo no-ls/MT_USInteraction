@@ -1,18 +1,24 @@
 import cv2
 import time
+import numpy as np
 from .Parameters import COLORS
 from abc import abstractmethod
 from cv2.typing import MatLike
 
 FPS_POS = (10, 20)
 
+DEFAULT_SLIDER_VALUE = 130 # 6
+DEFAULT_MAX_SLIDER_VALUE = 255 # 20
+DEFAULT_SLIDER_TEXT = "Colors"
+
 class Demo():
     def __init__(self) -> None:
         print("[DEMO] -", self.get_name())
         self.is_debug = False
-        
-        self.slider_val = 0
-        self.slider_name = "Input" # What does the slider control?
+
+        self.slider_value = DEFAULT_SLIDER_VALUE
+        self.slider_max = DEFAULT_MAX_SLIDER_VALUE
+        self.slider_name = DEFAULT_SLIDER_TEXT
         self.slider_contours = None
 
     def get_name(self)-> str:
@@ -37,7 +43,7 @@ class Demo():
         return self.slider_name
     
     def set_slider_input(self, input:int):
-        self.slider_val = input
+        self.slider_value = input
 
     def visualize_slider_change(self, frame):
         if self.slider_contours != None:
@@ -49,11 +55,58 @@ class Demo():
         """Bundled tasks before every demo"""
         self.show_fps(frame)
 
-        if self.is_debug:
-            self.visualize_slider_change(frame)
-
     @abstractmethod
-    def do(self, frame:MatLike, gray:MatLike)-> MatLike:
+    def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         """Abstract Method to be overridden by the specific demos.
            This is where the algorithm gets executed. Returns an image"""
         self.pre_tasks(frame)
+
+    @abstractmethod
+    def segment(self, frame:MatLike)-> MatLike:
+        """Default segmentation method. Returns the 'brightest' contours"""
+
+        # blur
+        frame = cv2.GaussianBlur(frame, (5,5), 0)
+
+        contours, result = color_quantization(frame, self.slider_value)
+        # contours, result = threshold(frame, self.slider_value)
+        if self.is_debug:
+            cv2.drawContours(frame, contours, -1, COLORS.PURPLE, 1)
+            return contours, result
+        
+        return contours, frame
+    
+# ----- SEGMENTATION ----- # 
+
+def grayscale(frame:MatLike)-> MatLike:
+    """Convert to gray, if it is not already"""
+    gray = frame
+    if len(frame.shape) == 3:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    return gray
+
+def threshold(frame:MatLike, value)-> tuple[MatLike, MatLike]:
+    gray = grayscale(frame)
+    _, thresh = cv2.threshold(gray, value, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    return contours, thresh
+
+def color_quantization(frame:MatLike, num_colors) -> tuple[MatLike, MatLike]:
+    """Use color quantization to segment the image. Returns found contours"""
+    # via: https://stackoverflow.com/a/66339640
+
+    # convert to gray as float in range 0 to 1
+    gray = grayscale(frame)
+    gray = gray.astype(np.float32)/255
+
+    # quantize and convert back to range 0 to 255 as 8-bits
+    result = 255*np.floor(gray*num_colors+0.5)/num_colors
+    result = result.clip(0,255).astype(np.uint8)
+
+    # find contours
+    _, thresh = cv2.threshold(result, 75, 255, cv2.THRESH_BINARY_INV)
+    
+    contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
+    # TODO: filter out the biggest contour -> is the entire area (for some reason)
+    return contours, result

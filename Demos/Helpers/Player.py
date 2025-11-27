@@ -77,8 +77,8 @@ class Player():
     def play_video(self, cap:cv2.VideoCapture):
 
         cv2.namedWindow(WINDOW)
-        cv2.createTrackbar(self.demo.get_slider_name(), WINDOW, self.demo.slider_val,
-                            TRACKBAR_MAX, self.demo.set_slider_input)
+        cv2.createTrackbar(self.demo.get_slider_name(), WINDOW, self.demo.slider_value,
+                            self.demo.slider_max, self.demo.set_slider_input)
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -110,7 +110,7 @@ class Player():
         src = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
         self.area.find_US_area(gray)
-        roi = self.area.mask_US_area(gray)
+        roi = self.area.mask_US_area(src)
         return (src, roi)
     
     def do_demo(self, frame:MatLike, gray:MatLike):

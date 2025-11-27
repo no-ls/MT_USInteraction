@@ -11,20 +11,27 @@ MAIN implementation of Painter demo
 BBOX_MIN_W = 10 # so that it doesn't detect bubbles
 BBOX_MIN_H = 10
 
+DEFAULT_THRESH = 130
+THRESH_MAX = 255
+
 class Painter(Demo):
     def __init__(self) -> None:
         super().__init__()
         self.lines = []
+        self.slider_val = DEFAULT_THRESH
+        self.slider_max = THRESH_MAX
+        self.slider_name = "Threshold"
 
-    def do(self, frame:MatLike, gray:MatLike)-> MatLike: 
-        self.show_fps(frame)
+    def do(self, frame:MatLike, gray:MatLike)-> MatLike:
+        super().do(frame, gray) 
+        # self.show_fps(frame)
 
         # blur image?
         # gray = cv2.bilateralFilter(gray,9,75,75)
         # gray = cv2.medianBlur(gray, 5)
 
         # NOTE threshold might change for videos
-        _, thresh = cv2.threshold(gray, 130, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(gray, self.slider_val, THRESH_MAX, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         x, y, w, h = cv2.boundingRect(max(contours, key=cv2.contourArea))
 
