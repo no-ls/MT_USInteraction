@@ -15,6 +15,10 @@ class Demo():
     def __init__(self) -> None:
         print("[DEMO] -", self.get_name())
         self.is_debug = False
+        self.area_w = None
+        self.area_h = None
+        self.masked_w = None
+        self.masked_h = None
 
         self.slider_value = DEFAULT_SLIDER_VALUE
         self.slider_max = DEFAULT_MAX_SLIDER_VALUE
@@ -23,7 +27,10 @@ class Demo():
 
     def get_name(self)-> str:
         return self.__class__.__name__
-    
+
+    def write_text(self, frame:MatLike, text:str, pos:tuple[int])-> None:
+        cv2.putText(frame, text, pos, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.WHITE, 1, cv2.LINE_AA)    
+
     def show_fps(self, frame:MatLike)->MatLike:
         self.new_frame_time = time.time()
         try:
@@ -49,17 +56,27 @@ class Demo():
         if self.slider_contours != None:
             cv2.drawContours(frame, self.slider_contours, -1, COLORS.PURPLE, 1)
   
+    def set_dimensions(self, frame:MatLike, masked:MatLike):
+        """Set the dimensions of the frame area"""
+        if self.area_h == None and self.area_w == None:
+            self.area_h, self.area_w, _ = frame.shape
+            self.masked_h, self.masked_w, _ = masked.shape # ??
+            
+            print(f"[INFO] Frame is: {self.area_h} x {self.area_w} px (h x w)")
+            print(f"[INFO] Mask  is: {self.masked_h} x {self.masked_w} px (h x w)") # ??
+
     # ----- ALGORITHM - STUFF ----- #
 
-    def pre_tasks(self, frame:MatLike):
+    def pre_tasks(self, frame:MatLike, masked:MatLike):
         """Bundled tasks before every demo"""
         self.show_fps(frame)
+        self.set_dimensions(frame, masked)
 
     @abstractmethod
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         """Abstract Method to be overridden by the specific demos.
            This is where the algorithm gets executed. Returns an image"""
-        self.pre_tasks(frame)
+        self.pre_tasks(frame, masked)
 
     @abstractmethod
     def segment(self, frame:MatLike)-> MatLike:
@@ -71,7 +88,8 @@ class Demo():
         contours, result = color_quantization(frame, self.slider_value)
         # contours, result = threshold(frame, self.slider_value)
         if self.is_debug:
-            cv2.drawContours(frame, contours, -1, COLORS.PURPLE, 1)
+            result = cv2.cvtColor(result, cv2.COLOR_GRAY2BGR)
+            cv2.drawContours(result, contours, -1, COLORS.PURPLE, 1)
             return contours, result
         
         return contours, frame

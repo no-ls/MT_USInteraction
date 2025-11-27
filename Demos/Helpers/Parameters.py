@@ -8,3 +8,4 @@ class COLORS:
     GREEN   = (0, 255, 0)
     RED     = (0, 0, 255)
     PURPLE  = (150, 0, 150)
+    YELLOW  = (0, 200, 200)
