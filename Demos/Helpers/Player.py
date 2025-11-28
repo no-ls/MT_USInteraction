@@ -2,7 +2,7 @@ import os
 import cv2
 import time
 import numpy as np
-from abc import abstractmethod
+from matplotlib import pyplot
 from cv2.typing import MatLike
 from .Parameters import KEYS, COLORS
 from .Demo_Class import Demo
@@ -91,10 +91,11 @@ class Player():
             if key == ord("s"):
                 self.save_frame(out)
             if key == ord("d"):
+                self.demo.toggle_debug()
                 pass
-                # self.demo.toggle_debug()
             cv2.imshow(WINDOW, out) 
         cv2.destroyAllWindows()
+        pyplot.close()
     
 
     def play_video(self, cap:cv2.VideoCapture):

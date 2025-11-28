@@ -113,6 +113,8 @@ def color_quantization(frame:MatLike, num_colors) -> tuple[MatLike, MatLike]:
     """Use color quantization to segment the image. Returns found contours"""
     # via: https://stackoverflow.com/a/66339640
 
+    frame = cv2.blur(frame, (7,7))
+
     # convert to gray as float in range 0 to 1
     gray = grayscale(frame)
     gray = gray.astype(np.float32)/255
@@ -122,9 +124,16 @@ def color_quantization(frame:MatLike, num_colors) -> tuple[MatLike, MatLike]:
     result = result.clip(0,255).astype(np.uint8)
 
     # find contours
-    _, thresh = cv2.threshold(result, 75, 255, cv2.THRESH_BINARY_INV)
-    
+    _, thresh = cv2.threshold(result, 90, 255, cv2.THRESH_BINARY_INV) # NOTE: Magic number
     contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
-    # TODO: filter out the biggest contour -> is the entire area (for some reason)
+    # filter contours and drop the biggest (entire image), and contours with too small areas (noise)
+    contours = sorted(contours, key=cv2.contourArea)
+    contours = contours[:-1]
+    contours = list(filter(drop_small_areas, contours))
+
     return contours, result
+
+def drop_small_areas(cnt):
+    return cv2.contourArea(cnt) > 200
+    # NOTE: Magic Number!!

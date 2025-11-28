@@ -29,18 +29,21 @@ demo for: acoustic properties of different materials
 
 ### 2. Painter
 demo for: depth values
+- `painter.py`
 - maybe use a "pen" instead of a finger for more consistent detection?
 - thresholds can change depending on footage -> sometimes a higher/lower value gets better detection
 - [ ] add a line-stop when the finger is remove for long enough (more than one frame at least)
 
 ### 3. Deformable Interaction
 demo for: tangible interaction (HCI application)
+- `deformer.py`
 - using a deformable stressball to create input interactions
 - map movement to "rolling the ball around"
 - map two different actions (e.g. jump, crouch) to squish (compress) and squash (flatten)
 
 ### 4. Water Flow
 demo for: noise of conductive material and Gestures (HCI application)
+- `gesturer.py`
 - use the bubbles "visible" in water to ...
   - recognize gestures (e.g. circle = select) (see also: 1$ recognizer)
   - (create flowing, moving paintings)
@@ -48,6 +51,7 @@ demo for: noise of conductive material and Gestures (HCI application)
 
 ### 5. Physics Visualization/Simulation ?
 demo for: reflections of sound waves
+- `visualizer.py`
 - simulate the sound waves interacting with different materials
 - or create a game based on reflection, e.g. Pong (have to reflect ball)
 - ...?
