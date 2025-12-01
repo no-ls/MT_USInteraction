@@ -119,6 +119,9 @@ class Player():
                 self.save_frame(out)
             if key == ord("d"):
                 self.demo.toggle_debug()
+            if key == KEYS.DOWN_ARROW or key == KEYS.UP_ARROW:
+                self.demo.set_slider_with_keys(key)
+                cv2.setTrackbarPos(self.demo.get_slider_name(), WINDOW, self.demo.slider_value)
             # TODO add more interaction (to interactively change variables for demos)
 
             # OUT

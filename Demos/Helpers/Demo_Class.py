@@ -1,14 +1,14 @@
 import cv2
 import time
 import numpy as np
-from .Parameters import COLORS
+from .Parameters import COLORS, KEYS
 from abc import abstractmethod
 from cv2.typing import MatLike
 
 FPS_POS = (10, 20)
 
-DEFAULT_SLIDER_VALUE = 130 # 6
-DEFAULT_MAX_SLIDER_VALUE = 255 # 20
+DEFAULT_SLIDER_VALUE = 6 # 130 6
+DEFAULT_MAX_SLIDER_VALUE = 20 # 255 # 20
 DEFAULT_SLIDER_TEXT = "Colors"
 
 class Demo():
@@ -51,6 +51,18 @@ class Demo():
     
     def set_slider_input(self, input:int):
         self.slider_value = input
+
+    def set_slider_with_keys(self, key):
+        """update the slider value using the arrow keys"""
+        if key == KEYS.DOWN_ARROW:
+            self.slider_value -= 1
+        else:
+            self.slider_value += 1
+        
+        if self.slider_value >= self.slider_max:
+            self.slider_value  = self.slider_max
+        if self.slider_value <= 0:
+            self.slider_value = 0
 
     def visualize_slider_change(self, frame):
         if self.slider_contours != None:
