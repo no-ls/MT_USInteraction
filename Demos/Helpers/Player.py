@@ -95,8 +95,6 @@ class Player():
                 pass
             cv2.imshow(WINDOW, out) 
         cv2.destroyAllWindows()
-        pyplot.close()
-    
 
     def play_video(self, cap:cv2.VideoCapture):
 
@@ -126,6 +124,7 @@ class Player():
             # OUT
             cv2.imshow(WINDOW, out)
         
+        self.demo.show_finished()
         cv2.destroyAllWindows()
         cap.release()
 

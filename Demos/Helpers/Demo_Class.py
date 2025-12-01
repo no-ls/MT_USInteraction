@@ -65,12 +65,17 @@ class Demo():
             print(f"[INFO] Frame is: {self.area_h} x {self.area_w} px (h x w)")
             print(f"[INFO] Mask  is: {self.masked_h} x {self.masked_w} px (h x w)") # ??
 
+    @abstractmethod
+    def show_finished(self):
+        """Show a finished result (e.g. point cloud) or similar (optional)"""
+        pass
+
     # ----- ALGORITHM - STUFF ----- #
 
     def pre_tasks(self, frame:MatLike, masked:MatLike):
         """Bundled tasks before every demo"""
-        self.show_fps(frame)
         self.set_dimensions(frame, masked)
+        self.show_fps(masked)
 
     @abstractmethod
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
