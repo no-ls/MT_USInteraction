@@ -13,7 +13,7 @@ SENSOR_ARTIFACT_AREA = 100
 DOWN = 1
 UP = -1
 
-class Visualizer(Demo):
+class Game(Demo):
     def __init__(self) -> None:
         super().__init__()
         self.pong = Pong()
@@ -43,6 +43,7 @@ class Pong():
         self.x = 250 # TODO
         self.y = 0
         self.direction = DOWN
+        self.score = 0
 
     def update(self, area_height, area_width, contours):
         if self.y > SENSOR_ARTIFACT_AREA: # ignore sensor-artifacts at the top
@@ -53,8 +54,8 @@ class Pong():
 
         # CHECK out-of-bounds
         if self.y >= area_height or self.y <= 0: # reset when oob
-            if self.y <= 0:
-                print("+1")
+            if self.y <= 0: # top = score
+                self.score += 1
             self.reset()
 
     def check_collision(self, contours):
@@ -76,9 +77,15 @@ class Pong():
 
     def draw(self, frame, debug=False)-> None:
         cv2.circle(frame, (self.x, self.y), self.radius, self.color, -1)        
+        self.write_score(frame)
+
+    def write_score(self, frame):
+        text = f"Score: {self.score}"
+        pos = (40, 50)
+        cv2.putText(frame, text, pos, cv2.FONT_HERSHEY_PLAIN, 1, COLORS.GREEN, 1, cv2.LINE_AA)    
 
 # ----- MAIN ----- #
 
 video = "../Data/stressball.mp4"
-player = Player(Visualizer(), video)
+player = Player(Game(), video)
 player.start_player()
