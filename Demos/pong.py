@@ -32,7 +32,7 @@ class Game(Demo):
     
     def do_pong(self, frame:MatLike, contours):
         self.pong.update(self.area_h, self.masked_w, contours)
-        self.pong.draw(frame)
+        self.pong.draw(frame, self.is_debug)
 
 # ----- PONG ----- #
 
@@ -50,9 +50,12 @@ class Pong():
         self.y0 = 0 # starting point
         self.x = self.x0
         self.y = self.y0
+        self.incidence_start = [self.x0, self.y0]
         self.reflection_angle = math.radians(DEGREES_90)
         self.collision_line = []
         self.reflection_line = []
+        self.incidence_line = []
+        self.has_reflected = False # so it doesn't bounce inside the contour
         # self.direction = DOWN
 
     # ----- GAME LOGIC ----- #
@@ -65,21 +68,28 @@ class Pong():
         self.check_oob(area_height, area_width)
 
     def check_oob(self, area_height, area_width):
-        """Check if the Ball is out of bounds"""
+        """Check if the Ball is out of bounds of the screen"""
+
         # Bottom
         if self.y >= area_height:
             self.reset()
-        
-        # top = GOAL
-        if self.y <= 0:
-            self.score += 1
-            self.reset()
+        else: # also reflect
+            start = [0, 0]
+            end = [area_width, area_height]
 
-        # sides
-        if self.x > area_width or self.x <= 0:
-            # also do reflection ??
-            self.reset() 
-            print("OOB @ sides")
+            if self.y <= 0: # top = GOAL
+                self.score += 1
+                end[:] = [area_width, 0]
+                self.reset(soft_reset=False)
+                # self.reset(soft_reset=True)
+            # NOTE: does not always work -> but usually gets out of bounds anyway
+            elif self.x > area_width: # right side
+                start[:] = [area_width, 0]
+                end[:] = [area_width, area_height]
+                self.calculate_reflection(start, end)
+            elif self.x <= 0: # left side
+                end[:] = [0, area_height]
+                self.calculate_reflection(start, end)
 
     def check_collision(self, contours):
         """Check if the ball collides with a found contour"""
@@ -88,36 +98,104 @@ class Pong():
 
         for contour in contours:
             result = cv2.pointPolygonTest(contour, (self.x, self.y), False) 
-            # if result == 0: # direct auf Linie -> nicht reliable
-            if result >= 1: 
-                # find the closest point on the contour
+
+            # TODO implement failsave -> too many reflections aka, if got stuck
+
+            if result >= 1 and not self.has_reflected: # i.e on the line or inside the contour
+                self.has_reflected = True
+
+                # find the point on the contour that is closest to the collision point
                 contour = contour.squeeze()
                 point = (self.x, self.y)
                 closest = self.closest_point(point, contour)
 
+                # handle out of range indices
+                start_idx = closest - 10
+                if start_idx < 0:
+                    start_idx = 0
+
+                end_idx = closest + 10
+                if end_idx >= len(contour):
+                    end_idx = len(contour) - 1
+
                 # use an offset to get a line of the contour on which the point lies
-                start = contour[closest-10] # TODO handle out of range, offset
-                end = contour[closest+10]
-                self.collision_line[:] = [start, end] # for drawing lines
+                start = contour[start_idx] 
+                end = contour[end_idx]
 
-                # calculate the slope of the collision line
-                collision_slope = self.get_slope(start[0], start[1], end[0], end[1])
+                self.calculate_reflection(start, end)
+            elif result == -1 and self.has_reflected:
+                self.has_reflected = False
+                print("reset reflection")
 
-                # get incident line
-                incident_slope = self.get_slope(self.x0, self.y0, self.x, self.y)
+    def calculate_reflection_1(self, start:list[int], end:list[int], direction=-1):
+        """TEST
+        via: ChatGPT (I have the start and endpoints for two lines, the incidence line and the mirror line. 
+        How do I calculate the angle of reflection, so that it works from any direction. I'm using python)"""
+        # incidence = self.incidence_start[0], self.incidence_start[1], self.x, self.y
+        # collision start[0], start[1], end[0], end[1]
+        P1 = np.array([self.incidence_start[0], self.incidence_start[1]])
+        P2 = np.array([self.x, self.y])
+        M1 = np.array([start[0], start[1]])
+        M2 = np.array([end[0], end[1]])
 
-                # get angle between incident line and collision line
-                between_angle = self.get_angle_between_lines(collision_slope, incident_slope) # in degrees
+        incident = P2 - P1
+        mirror = M2 - M1
 
-                # get incident angle = angle between normal and incident line
-                incident_angle = DEGREES_90 - between_angle
+        # normalize vectors
+        incident = incident / np.linalg.norm(incident)
+        mirror = mirror / np.linalg.norm(incident)
 
-                # ?? get reflection angle
-                self.reflection_angle = np.deg2rad(incident_angle) * -1
+        # compute normal of mirror
+        normal = np.array([-mirror[1], mirror[0]])
+        normal = normal / np.linalg.norm(normal)
 
-                ref_x, ref_y = self.calculate_new_xy((self.x, self.y), self.speed, self.reflection_angle)
-                self.reflection_line[:] = [[self.x, self.y], [ref_x, ref_y]]
-    
+        print("normal", normal)
+        self.speed = - 8
+
+        # reflect
+        dot = np.dot(incident, normal)
+        reflected = incident - 2 * dot * normal
+
+        # angles 
+        angle_incidence = np.arccos(np.clip(dot, -1, 1))
+        angle_reflection = angle_incidence 
+
+        theta_ref = np.arctan2(reflected[1], reflected[0])
+        # set
+        self.reflection_angle = np.deg2rad(theta_ref)
+
+        self.collision_line[:] = [start, end]
+
+    def calculate_reflection(self, start:list[int], end:list[int], direction=-1):
+        """Calculate the reflection off of a line"""
+
+        # calculate the slope of the collision line
+        collision_slope = self.get_slope(start[0], start[1], end[0], end[1])
+
+        # get incident line
+        incident_slope = self.get_slope(self.incidence_start[0], self.incidence_start[1], self.x, self.y)
+
+        # get angle between incident line and collision line
+        between_angle = self.get_angle_between_lines(collision_slope, incident_slope) # in degrees
+
+        # get incident angle = angle between normal and incident line
+        incidence_angle = DEGREES_90 - between_angle
+
+        # get reflection angle
+        mirror_angle = 180 - incidence_angle # mirror the incidence angle
+        self.reflection_angle = np.deg2rad(mirror_angle) * -1 # make it go up
+        
+        # for DEBUG drawing
+        self.collision_line[:] = [start, end]
+
+        ref_x, ref_y = self.calculate_new_xy((self.x, self.y), self.speed, self.reflection_angle)
+        self.reflection_line[:] = [[self.x, self.y], [ref_x, ref_y]]
+
+        self.incidence_line[:] = [self.incidence_start, [self.x, self.y]]
+
+        # reset incidence_line start
+        self.incidence_start = [self.x, self.y]
+            
     # ----- MATH HELPERS ----- #
 
     def closest_point(self, point: tuple, contour:np.array) -> int:
@@ -127,10 +205,10 @@ class Pong():
         return np.argmin(dist_2)
     
     def calculate_new_xy(self, old_xy:tuple, speed, angle_in_radians):
+        """Use an angle to calculate the new coordinates, via: https://stackoverflow.com/a/46697552"""
         old_x, old_y = old_xy
         new_x = int(old_x + (speed*math.cos(angle_in_radians)))
         new_y = int(old_y + (speed*math.sin(angle_in_radians)))
-        # print("new xy", new_x, new_y)
         return new_x, new_y
     
     def get_slope(self, start_x, start_y, end_x, end_y):
@@ -144,10 +222,13 @@ class Pong():
 
     # ----- GAME HELPERS ----- # 
 
-    def reset(self):
-        self.x = self.x0
-        self.y = self.y0
+    def reset(self, soft_reset=False):
+        if not soft_reset:
+            self.x = self.x0
+            self.y = self.y0
         self.reflection_angle = math.radians(DEGREES_90)
+        self.speed = 8
+        self.incidence_start = [self.x0, self.y0]
         # self.direction = DOWN#
         # self.x = random.randint(80, 400) # TODO offset to keep in play area
         # self.radius = random.randint(5, 20)
@@ -158,15 +239,26 @@ class Pong():
         self.write_score(frame)
 
         # DEBUG
+        if debug:
+            self.draw_debug_lines(frame)
+                
+    def draw_debug_lines(self, frame):
+        """draw the angles and reflection lines to help understand whats happening"""
         if len(self.collision_line) != 0:
             start = (self.collision_line[0][0], self.collision_line[0][1])
             end = (self.collision_line[1][0], self.collision_line[1][1])
             cv2.line(frame, start, end, COLORS.RED, 3)
+       
+        if len(self.incidence_line) != 0:
+            cv2.arrowedLine( frame, (self.incidence_line[0][0], self.incidence_line[0][1]), 
+                            (self.incidence_line[1][0], self.incidence_line[1][1]),
+                            color=COLORS.PURPLE, thickness=2, tipLength=0.3)
 
         if len(self.reflection_line) != 0:
             cv2.arrowedLine( frame, (self.reflection_line[0][0], self.reflection_line[0][1]), 
-                            (self.reflection_line[1][0] + 10, self.reflection_line[1][1] + 10),
-                            color=(0, 255, 0), thickness=2, tipLength=0.3)
+                            (self.reflection_line[1][0], self.reflection_line[1][1]),
+                            color=(0, 255, 0), thickness=1, tipLength=0.3)
+            
 
     def write_score(self, frame):
         text = f"Score: {self.score}"
