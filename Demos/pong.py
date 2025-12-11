@@ -16,6 +16,9 @@ DOWN = 1
 UP = -1
 
 DEGREES_90 = 90
+DEGREES_180 = 180
+
+OFFSET_COLLISION_END_POINTS = 10 # How much to go to each side of the collision point on the contour
 
 class Game(Demo):
     def __init__(self) -> None:
@@ -110,11 +113,11 @@ class Pong():
                 closest = self.closest_point(point, contour)
 
                 # handle out of range indices
-                start_idx = closest - 10
+                start_idx = closest - OFFSET_COLLISION_END_POINTS
                 if start_idx < 0:
                     start_idx = 0
 
-                end_idx = closest + 10
+                end_idx = closest + OFFSET_COLLISION_END_POINTS
                 if end_idx >= len(contour):
                     end_idx = len(contour) - 1
 
@@ -182,7 +185,7 @@ class Pong():
         incidence_angle = DEGREES_90 - between_angle
 
         # get reflection angle
-        mirror_angle = 180 - incidence_angle # mirror the incidence angle
+        mirror_angle = DEGREES_180 - incidence_angle # mirror the incidence angle
         self.reflection_angle = np.deg2rad(mirror_angle) * -1 # make it go up
         
         # for DEBUG drawing
