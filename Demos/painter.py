@@ -1,5 +1,6 @@
 import cv2
 from cv2.typing import MatLike
+import numpy as np
 from Helpers.Demo_Class import Demo
 from Helpers.Player import Player
 from Helpers.Parameters import COLORS
@@ -11,6 +12,7 @@ MAIN implementation of Painter demo
 BBOX_MIN_W = 10 # so that it doesn't detect bubbles
 BBOX_MIN_H = 10
 
+DEFAULT_LINE_WIDTH = 3
 DEFAULT_THRESH = 130
 THRESH_MAX = 255
 
@@ -29,7 +31,6 @@ class Painter(Demo):
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         super().do(frame, masked)
 
-        # NOTE threshold might work better for some videos
         gray = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, self.slider_value, THRESH_MAX, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -40,13 +41,16 @@ class Painter(Demo):
             self.is_newline = True
         else:
             x, y, w, h = cv2.boundingRect(max(contours, key=cv2.contourArea))
-            cv2.drawContours(frame, contours, -1, COLORS.PURPLE, 1)
 
             if w > BBOX_MIN_W and h > BBOX_MIN_H:
-                # find the center
-                cv2.rectangle(frame, (x, y), (x + w, y + h), COLORS.GREEN, 1)
                 center = (round(x + w/2), round(y + h/2))
-                cv2.circle(frame, center, 5, COLORS.GREEN, -1)
+
+                if self.is_debug:
+                    text = f"{x}, {y}"
+                    self.write_text(frame, text, (x, y))
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), COLORS.PURPLE, 2)
+                    cv2.circle(frame, center, 5, COLORS.GREEN, -1)
+                    cv2.drawContours(frame, contours, -1, COLORS.BLUE, 1)
 
                 if self.is_newline:
                     self.current_line = Line()
@@ -69,6 +73,7 @@ class Line():
 
     def __init__(self) -> None:
         self.points = []
+        self.thickness = DEFAULT_LINE_WIDTH
 
     def add_point(self, point:tuple[int]):
         self.points.append(point)
@@ -80,7 +85,7 @@ class Line():
         for i in range (0, len(self.points)-1):
             start = self.points[i]
             end = self.points[i+1]
-            cv2.line(frame, start, end, COLORS.RED, 3)
+            cv2.line(frame, start, end, COLORS.RED, self.thickness)
  
 
 # ----- MAIN ----- #
