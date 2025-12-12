@@ -4,6 +4,8 @@ from Helpers.Demo_Class import Demo
 from Helpers.Player import Player
 from Helpers.Parameters import COLORS
 from cv2.typing import MatLike
+import pyautogui
+import mouse
 
 """
 NOTEs
@@ -12,6 +14,7 @@ NOTEs
     - increasing the contrast with the US machine + using color-quant 1 helps
 - fit an ellipse over the contours
     - approximates the shape, but stays flexible
+        - other approximations (e.g. circle, square, simplified contour) don't change enough to differentiate
     - SQUISH = compare the two axis of the ellipse, to check if one is sig. longer
     - SQUASH = compare the length of the axis to a (currently) set value; check if its larger
 - ? use the center of the ellipse to mimic movement
@@ -21,16 +24,40 @@ NOTEs
     - C) just visualize the interaction -> e.g. squash increases amount, squish decreases
 """
 
+# How long/short the axises of the ellipse are to differentiate
+SQUISH_AXIS_LENGTH = 80
+SQUASH_AXIS_LENGTH = 300 
+
+MIN_AREA_SIZE = 5000
+
+AXIS_OFFSET = 2
+
+# TODO: ignore too small changes in the contour/ellipse
+
 class Deformer(Demo):
     def __init__(self) -> None:
         super().__init__()
         self.base_distance = 0
         self.i = 0
-        self.deformation = "NONE"
         self.slider_value = 1
+        self.has_clicked = False
+        self.has_squash_clicked = False
+        self.has_squish_clicked = False
+
+        self.prev_minor = 0
+        self.prev_major = 0
+
+        self.monitor_w, self.monitor_h = self.set_monitor_dimensions() # evtl. use package screeninfo
+        
+
+    # evtl. use package screeninfo
+    def set_monitor_dimensions(self) -> tuple[int]:
+        width, height = pyautogui.size()
+        return width, height
     
     def do(self, frame:MatLike, masked:MatLike) -> MatLike:
         """Fit a ellipse over the contours to approximate the shape and compare axis"""
+        super().do(frame, masked)
         
         contours, frame = self.segment(masked)
         if len(contours) < 1: return frame
@@ -38,9 +65,14 @@ class Deformer(Demo):
         # get the biggest contour(s) 
         biggest = contours[-1]
 
+        # ignore too small contours
+        if cv2.contourArea(biggest) < MIN_AREA_SIZE: return frame
+
         # concatenate 2nd biggest contour for better contours
         if len(contours) >= 2 and cv2.contourArea(contours[-2]) > 500:
             biggest = np.concatenate((biggest, contours[-2]))
+
+        # -- DETECTION -- #
 
         # fit a ellipse around the contour to approximate the shape of the ball   
         ellipse = cv2.fitEllipse(biggest)
@@ -51,15 +83,61 @@ class Deformer(Demo):
         major = max(axis1, axis2)
         minor = min(axis1, axis2)
 
-        # TODO: interaction (+ only once)
+        # TODO: if changes to major/minor is too small, than don't change
 
-        if major >= minor + 80: # !! Magic number
-            print("SQUISH")
+        # -- INTERACTION -- #
 
-        if major >= 300 and minor >= 300: # !! Magic number
-            print("SQUASH")
+        mouse_x, mouse_y = self.translate_mouse_coordinates(center_x, center_y)
+        mouse.move(mouse_x, mouse_y, absolute=True, duration=0)
+
+        # pyautogui.move(center_x, center_y, duration=1, tween=pyautogui.easeInOutQuad)
+        # pyautogui.moveTo(center_x, center_y, duration=0) -> has bad performance for some reason
+
+        if major >= minor + SQUISH_AXIS_LENGTH and not self.has_squish_clicked:
+            print("SQUISH == LEFT CLICK")
+            self.has_squish_clicked = True
+            if not self.is_debug: mouse.right_click()
+        elif major >= SQUASH_AXIS_LENGTH and minor >= SQUASH_AXIS_LENGTH and not self.has_squash_clicked:
+            print("SQUASH == RIGHT CLICK")
+            self.has_squash_clicked = True
+            if not self.is_debug: mouse.click()
+        
+        # RESET clicks
+        elif self.has_squash_clicked and major <= SQUASH_AXIS_LENGTH:
+            self.has_squash_clicked = False
+            # print("reset SQUASH click", minor, major)
+        elif self.has_squish_clicked and major < minor + SQUISH_AXIS_LENGTH and minor > major - SQUISH_AXIS_LENGTH: # == circle
+            self.has_squish_clicked = False
+            # print("reset SQUISH click", minor, major)
+            # tweaks out slightly
         
         return frame
+    
+    def translate_mouse_coordinates(self, x:int, y:int)-> tuple[int]:
+        """Translate the coordinates to fit the current screen"""
+        if self.masked_h == None or self.monitor_w == None:
+            self.monitor_w, self.monitor_h = self.set_monitor_dimensions()
+
+        # scale mouse positions to fit monitor
+        mouse_x = x * (self.monitor_w / self.masked_w)
+        mouse_y = y * (self.monitor_h / self.masked_h)
+        return mouse_x, mouse_y
+    
+    # OPTIONAL
+    def translate_mouse_coordinates_2(self, x:int, y:int)-> tuple[int]:
+        """If the small system does not start at 0"""
+        xmin = 0
+        xmax = self.masked_w
+        ymin = 0
+        ymax = self.masked_h
+
+        x_norm = (x - xmin) / (xmax - xmin)
+        y_norm = (y - ymin) / (ymax - ymin)
+
+        mouse_x = xmin + x_norm * (xmax - xmin)
+        mouse_y = ymin + y_norm * (ymax - ymin)
+        
+        return mouse_x, mouse_y
 
 
 # ----- HELPERS -----  #
