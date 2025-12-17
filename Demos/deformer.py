@@ -47,13 +47,14 @@ class Deformer(Demo):
         self.prev_minor = 0
         self.prev_major = 0
 
-        self.monitor_w, self.monitor_h = self.set_monitor_dimensions() # evtl. use package screeninfo
+        self.monitor_w = 0
+        self.monitor_h = 0
+        self.set_monitor_dimensions() # evtl. use package screeninfo
         
 
     # evtl. use package screeninfo
     def set_monitor_dimensions(self) -> tuple[int]:
-        width, height = pyautogui.size()
-        return width, height
+        self.monitor_w, self.monitor_h = pyautogui.size()
     
     def do(self, frame:MatLike, masked:MatLike) -> MatLike:
         """Fit a ellipse over the contours to approximate the shape and compare axis"""
@@ -113,33 +114,27 @@ class Deformer(Demo):
         
         return frame
     
-    # TODO use actual US area not just image proportions
-    def translate_mouse_coordinates(self, x:int, y:int)-> tuple[int]:
+    def translate_mouse_coordinates_old(self, x:int, y:int)-> tuple[int]:
         """Translate the coordinates to fit the current screen"""
         if self.image_h == None or self.monitor_w == None:
-            self.monitor_w, self.monitor_h = self.set_monitor_dimensions()
+            self.set_monitor_dimensions()
 
         # scale mouse positions to fit monitor
         mouse_x = x * (self.monitor_w / self.image_w)
         mouse_y = y * (self.monitor_h / self.image_h)
         return mouse_x, mouse_y
     
-    # OPTIONAL
-    def translate_mouse_coordinates_2(self, x:int, y:int)-> tuple[int]:
-        """If the small system does not start at 0"""
-        xmin = 0
-        xmax = self.image_w
-        ymin = 0
-        ymax = self.image_h
+    # use actual us area to scale mouse coordinates
+    def translate_mouse_coordinates(self, x:int, y:int)-> tuple[int]:
+        """Translate the mouse coordinate to fit the current screen,
+        while taking into account, that the US area does not start at (0,0)"""
 
-        x_norm = (x - xmin) / (xmax - xmin)
-        y_norm = (y - ymin) / (ymax - ymin)
+        if self.us_area == None: return
+        if self.monitor_w == None: self.set_monitor_dimensions()
 
-        mouse_x = xmin + x_norm * (xmax - xmin)
-        mouse_y = ymin + y_norm * (ymax - ymin)
-        
+        mouse_x = (x - self.us_area.x) * (self.monitor_w / self.us_area.w)
+        mouse_y = (y - self.us_area.y) * (self.monitor_h / self.us_area.h)
         return mouse_x, mouse_y
-
 
 # ----- HELPERS -----  #
 
