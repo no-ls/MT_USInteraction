@@ -118,6 +118,8 @@ class Player():
         cv2.namedWindow(WINDOW)
         cv2.createTrackbar(self.demo.get_slider_name(), WINDOW, self.demo.slider_value,
                             self.demo.slider_max, self.demo.set_slider_input)
+        
+        last_frame = None
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -131,6 +133,7 @@ class Player():
             # KEYBOARD interactions
             key = cv2.waitKeyEx(25)
             if key == ord("q") or key == KEYS.ESC:
+                last_frame = out
                 return
             else:
                 self.handle_key_interaction(key, out)
@@ -138,7 +141,7 @@ class Player():
             # OUT
             cv2.imshow(WINDOW, out)
         
-        self.demo.on_finished()
+        self.demo.on_finished(out)
         cv2.destroyAllWindows()
         cap.release()
 

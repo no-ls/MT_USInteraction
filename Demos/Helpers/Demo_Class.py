@@ -87,9 +87,11 @@ class Demo():
     def set_US_area(self, area):
         self.us_area = area
 
+    # ----- ABSTRACT METHODS (for individual overriding) ----- #
+
     @abstractmethod
-    def show_finished(self):
-        """Show a finished result (e.g. point cloud) or similar (optional)"""
+    def on_finished(self, frame:MatLike):
+        """What to do with a finished result (e.g. point cloud) or similar"""
         pass
     
     @abstractmethod
@@ -104,7 +106,10 @@ class Demo():
             print("saved image @", filepath)
         except:
             print("[ERR] couldn't save")
-        pass
+    
+    @abstractmethod
+    def reset(self):
+        print("Nothing to reset...")
 
     # ----- ALGORITHM - STUFF ----- #
 

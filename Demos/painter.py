@@ -21,8 +21,6 @@ DEFAULT_LINE_WIDTH = 3
 DEFAULT_THRESH = 130
 THRESH_MAX = 255
 
-# NOTE: some videos work better with threshold, some with color quantization
-
 class Painter(Demo):
     def __init__(self) -> None:
         super().__init__()
@@ -99,7 +97,9 @@ class Painter(Demo):
         self.lines = []
         self.is_newline = True
 
-# TODO: save option (w/w.o US background) ?
+    def on_finished(self, frame:MatLike):
+        """Autosave"""
+        self.save(frame)
 
 
 class Line():
