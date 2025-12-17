@@ -23,6 +23,7 @@ OFFSET_COLLISION_END_POINTS = 10 # How much to go to each side of the collision 
 class Game(Demo):
     def __init__(self) -> None:
         super().__init__()
+        self.us_area_threshold = 20
         self.pong = Pong()
 
     def do(self, frame: MatLike, masked: MatLike) -> MatLike:

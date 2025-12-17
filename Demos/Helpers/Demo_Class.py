@@ -13,6 +13,8 @@ DEFAULT_MAX_SLIDER_VALUE = 20 # 255 # 20
 DEFAULT_SLIDER_TEXT = "Colors"
 DEFAULT_OUT_DIR = "../Data/Out"
 
+DEFAULT_US_AREA_THRESHOLD = 40
+
 class Demo():
     def __init__(self) -> None:
         print("[DEMO] -", self.get_name())
@@ -27,6 +29,7 @@ class Demo():
         self.slider_name = DEFAULT_SLIDER_TEXT
         self.slider_contours = None
 
+        self.us_area_threshold = DEFAULT_US_AREA_THRESHOLD
         self.area = None
 
     def get_name(self)-> str:

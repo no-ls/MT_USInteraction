@@ -14,7 +14,7 @@ WINDOW = "Demos"
 TRACKBAR = "Input"
 TRACKBAR_MIN = 0
 TRACKBAR_MAX = 255
-US_AREA_THRESHOLD = 20
+US_AREA_THRESHOLD = 40 # pong needs 20 / painter needs 40 (now for some reason)
 PROBE_ARTIFACT = 10
 
 # ----- HELPERS ----- #
@@ -27,9 +27,9 @@ class US_Area():
         self.w = 0
         self.h = 0
 
-    def update_US_area(self, gray:MatLike) -> bool:
+    def update_US_area(self, gray:MatLike, threshold=US_AREA_THRESHOLD) -> bool:
         """Find the original image so only the Ultrasound scan area is left""" 
-        _, thresh = cv2.threshold(gray, US_AREA_THRESHOLD, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
         eroded = cv2.erode(thresh, None, iterations=1) # get rid of text/lines
         contours, _ = cv2.findContours(eroded, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
@@ -152,7 +152,7 @@ class Player():
         """Rotate the video and find the US area"""
         src = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
-        changed_area = self.area.update_US_area(gray)
+        changed_area = self.area.update_US_area(gray, self.demo.us_area_threshold)
         if changed_area: 
             self.demo.set_US_area(self.area)
         roi = self.area.mask_US_area(src)
