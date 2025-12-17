@@ -34,7 +34,8 @@ class Game(Demo):
         return frame
     
     def do_pong(self, frame:MatLike, contours):
-        self.pong.update(self.area_h, self.masked_w, contours)
+        if self.image_h == None: pass
+        self.pong.update(self.image_h, self.image_w, contours)
         self.pong.draw(frame, self.is_debug)
 
 # ----- PONG ----- #

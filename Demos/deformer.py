@@ -113,23 +113,24 @@ class Deformer(Demo):
         
         return frame
     
+    # TODO use actual US area not just image proportions
     def translate_mouse_coordinates(self, x:int, y:int)-> tuple[int]:
         """Translate the coordinates to fit the current screen"""
-        if self.masked_h == None or self.monitor_w == None:
+        if self.image_h == None or self.monitor_w == None:
             self.monitor_w, self.monitor_h = self.set_monitor_dimensions()
 
         # scale mouse positions to fit monitor
-        mouse_x = x * (self.monitor_w / self.masked_w)
-        mouse_y = y * (self.monitor_h / self.masked_h)
+        mouse_x = x * (self.monitor_w / self.image_w)
+        mouse_y = y * (self.monitor_h / self.image_h)
         return mouse_x, mouse_y
     
     # OPTIONAL
     def translate_mouse_coordinates_2(self, x:int, y:int)-> tuple[int]:
         """If the small system does not start at 0"""
         xmin = 0
-        xmax = self.masked_w
+        xmax = self.image_w
         ymin = 0
-        ymax = self.masked_h
+        ymax = self.image_h
 
         x_norm = (x - xmin) / (xmax - xmin)
         y_norm = (y - ymin) / (ymax - ymin)

@@ -14,7 +14,7 @@ WINDOW = "Demos"
 TRACKBAR = "Input"
 TRACKBAR_MIN = 0
 TRACKBAR_MAX = 255
-US_AREA_THRESHOLD = 30
+US_AREA_THRESHOLD = 20
 PROBE_ARTIFACT = 10
 
 # ----- HELPERS ----- #
@@ -22,19 +22,32 @@ PROBE_ARTIFACT = 10
 class US_Area():
     """The area of the image/video that contains only the ultrasound scan"""
     def __init__(self) -> None:
-        # self.x = x # top right
-        # self.y = y # top right
-        # self.w = w
-        # self.h = h
-        pass
+        self.x = 0 # top right
+        self.y = 0 # top right
+        self.w = 0
+        self.h = 0
 
-    def find_US_area(self, gray:MatLike):
+    def update_US_area(self, gray:MatLike) -> bool:
         """Find the original image so only the Ultrasound scan area is left""" 
         _, thresh = cv2.threshold(gray, US_AREA_THRESHOLD, 255, cv2.THRESH_BINARY)
         eroded = cv2.erode(thresh, None, iterations=1) # get rid of text/lines
         contours, _ = cv2.findContours(eroded, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-        self.x, self.y, self.w, self.h = cv2.boundingRect(max(contours, key=cv2.contourArea))
-    
+
+        x, y, w, h = cv2.boundingRect(max(contours, key=cv2.contourArea))
+        
+        # only change if the x/y coordinates change
+        # NOTE: might have to change to w/h to actually detect zoom changes
+        if self.x != x and self.y != y:
+            self.set_area_parameters(x, y, w, h)
+            return True
+        return False
+
+    def set_area_parameters(self, x:int, y:int, w:int, h:int):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
     def mask_US_area(self, img):
         """Return a copy of the image that is masked to the US-Area (rest is black)"""
         black = np.zeros((img.shape[0], img.shape[1], 3), np.uint8)
@@ -50,7 +63,6 @@ class US_Area():
         return cv2.bitwise_and(img, img, mask=mask)
         # via: https://stackoverflow.com/a/42007566
         # ROI = image[y:y+h, x:x+w] (https://stackoverflow.com/a/58177717) 
-
 
 
 # ----- PLAYER ----- # 
@@ -140,7 +152,9 @@ class Player():
         """Rotate the video and find the US area"""
         src = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
-        self.area.find_US_area(gray)
+        changed_area = self.area.update_US_area(gray)
+        if changed_area: 
+            self.demo.set_US_area(self.area)
         roi = self.area.mask_US_area(src)
         return (src, roi)
     

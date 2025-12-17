@@ -17,8 +17,8 @@ class Demo():
     def __init__(self) -> None:
         print("[DEMO] -", self.get_name())
         self.is_debug = False
-        self.area_w = None
-        self.area_h = None
+        self.image_w = None
+        self.image_h = None
         self.masked_w = None
         self.masked_h = None
 
@@ -26,6 +26,8 @@ class Demo():
         self.slider_max = DEFAULT_MAX_SLIDER_VALUE
         self.slider_name = DEFAULT_SLIDER_TEXT
         self.slider_contours = None
+
+        self.area = None
 
     def get_name(self)-> str:
         return self.__class__.__name__
@@ -72,12 +74,15 @@ class Demo():
   
     def set_dimensions(self, frame:MatLike, masked:MatLike):
         """Set the dimensions of the frame area"""
-        if self.area_h == None and self.area_w == None:
-            self.area_h, self.area_w, _ = frame.shape
-            self.masked_h, self.masked_w, _ = masked.shape # ??
+        if self.image_h == None and self.image_w == None:
+            self.image_h, self.image_w, _ = frame.shape
+            # self.masked_h, self.masked_w, _ = masked.shape # ??
             
-            print(f"[INFO] Frame is: {self.area_h} x {self.area_w} px (h x w)")
-            print(f"[INFO] Mask  is: {self.masked_h} x {self.masked_w} px (h x w)") # ??
+            print(f"[INFO] Frame is: {self.image_h} x {self.image_w} px (h x w)")
+            # print(f"[INFO] Mask  is: {self.masked_h} x {self.masked_w} px (h x w)") # ??
+
+    def set_US_area(self, area):
+        self.us_area = area
 
     @abstractmethod
     def show_finished(self):
