@@ -1,11 +1,10 @@
-import os
 import cv2
-import time
 import numpy as np
 from matplotlib import pyplot
 from cv2.typing import MatLike
 from .Parameters import KEYS, COLORS
 from .Demo_Class import Demo
+# from threading import Thread
 
 VIDEO_ID = 2 # video id for the virtual camera
 DEFAULT_VID = "../Data/Finger1.mp4"
@@ -15,7 +14,7 @@ WINDOW = "Demos"
 TRACKBAR = "Input"
 TRACKBAR_MIN = 0
 TRACKBAR_MAX = 255
-US_AREA_THRESHOLD = 20
+US_AREA_THRESHOLD = 30
 PROBE_ARTIFACT = 10
 
 # ----- HELPERS ----- #
@@ -32,7 +31,7 @@ class US_Area():
     def find_US_area(self, gray:MatLike):
         """Find the original image so only the Ultrasound scan area is left""" 
         _, thresh = cv2.threshold(gray, US_AREA_THRESHOLD, 255, cv2.THRESH_BINARY)
-        eroded = cv2.erode(thresh, None, iterations=2) # get rid of text/lines
+        eroded = cv2.erode(thresh, None, iterations=1) # get rid of text/lines
         contours, _ = cv2.findContours(eroded, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
         self.x, self.y, self.w, self.h = cv2.boundingRect(max(contours, key=cv2.contourArea))
     
@@ -63,17 +62,23 @@ class Player():
         self.video = video
         self.area = US_Area()
 
+        self.cap = None
+
     def start_player(self):
-        cap = cv2.VideoCapture(VIDEO_ID)
-        if not cap.isOpened():
+        self.cap = cv2.VideoCapture(VIDEO_ID)
+        # self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+
+        if not self.cap.isOpened():
             if ".mp4" in self.video:
                 print("[INFO] - could not find a stream, will use video")
-                cap = cv2.VideoCapture(self.video)
-                self.play_video(cap)
+                self.cap = cv2.VideoCapture(self.video)
+                self.play_video(self.cap)
             else:
                 print("[INFO] - found image")
                 frame = cv2.imread(self.video)
                 self.show_img(frame)
+        else:
+            self.play_video(self.cap)
     
     def show_img(self, frame:MatLike)-> None:
         cv2.namedWindow(WINDOW)
@@ -108,8 +113,8 @@ class Player():
                 break
             
             # DEMO output
-            frame, prepped = self.prepare_video(frame)
-            out = self.do_demo(frame, prepped)
+            frame, masked = self.prepare_video(frame) # only find us area once ?
+            out = self.do_demo(frame, masked)
 
             # KEYBOARD interactions
             key = cv2.waitKeyEx(25)
@@ -143,12 +148,4 @@ class Player():
         return self.demo.do(frame, gray)
     
     def save_frame(self, frame:MatLike):
-        if not os.path.isdir(DEFAULT_OUT_DIR):
-            os.makedirs(DEFAULT_OUT_DIR)
-
-        try:
-            filepath = f"{DEFAULT_OUT_DIR}/out-{self.demo.get_name()}_{time.time()}.png"
-            cv2.imwrite(filepath, frame)
-            print("saved image @", filepath)
-        except:
-            print("[ERR] couldn't save")
+        self.demo.save(frame)

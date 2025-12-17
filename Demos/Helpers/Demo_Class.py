@@ -1,3 +1,4 @@
+import os
 import cv2
 import time
 import numpy as np
@@ -10,6 +11,7 @@ FPS_POS = (10, 20)
 DEFAULT_SLIDER_VALUE = 6 # 130 6
 DEFAULT_MAX_SLIDER_VALUE = 20 # 255 # 20
 DEFAULT_SLIDER_TEXT = "Colors"
+DEFAULT_OUT_DIR = "../Data/Out"
 
 class Demo():
     def __init__(self) -> None:
@@ -81,6 +83,20 @@ class Demo():
     def show_finished(self):
         """Show a finished result (e.g. point cloud) or similar (optional)"""
         pass
+    
+    @abstractmethod
+    def save(self, frame):
+        """Save the current frame"""
+        if not os.path.isdir(DEFAULT_OUT_DIR):
+            os.makedirs(DEFAULT_OUT_DIR)
+
+        try:
+            filepath = f"{DEFAULT_OUT_DIR}/out-{self.get_name()}_{time.time()}.png"
+            cv2.imwrite(filepath, frame)
+            print("saved image @", filepath)
+        except:
+            print("[ERR] couldn't save")
+        pass
 
     # ----- ALGORITHM - STUFF ----- #
 
@@ -92,12 +108,12 @@ class Demo():
     @abstractmethod
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         """Abstract Method to be overridden by the specific demos.
-           This is where the algorithm gets executed. Returns an image"""
+           This is where the algorithm gets executed. Returns an image."""
         self.pre_tasks(frame, masked)
 
     @abstractmethod
-    def segment(self, frame:MatLike)-> MatLike:
-        """Default segmentation method. Returns the 'brightest' contours"""
+    def segment(self, frame:MatLike)-> tuple[list, MatLike]:
+        """Default segmentation method. Returns the 'brightest' contours."""
 
         # blur
         frame = cv2.GaussianBlur(frame, (5,5), 0)
