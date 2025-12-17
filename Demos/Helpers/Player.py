@@ -131,22 +131,29 @@ class Player():
             # KEYBOARD interactions
             key = cv2.waitKeyEx(25)
             if key == ord("q") or key == KEYS.ESC:
-                break
-            if key == ord("s"):
-                self.save_frame(out)
-            if key == ord("d"):
-                self.demo.toggle_debug()
-            if key == KEYS.DOWN_ARROW or key == KEYS.UP_ARROW:
-                self.demo.set_slider_with_keys(key)
-                cv2.setTrackbarPos(self.demo.get_slider_name(), WINDOW, self.demo.slider_value)
-            # TODO add more interaction (to interactively change variables for demos)
+                return
+            else:
+                self.handle_key_interaction(key, out)
 
             # OUT
             cv2.imshow(WINDOW, out)
         
-        self.demo.show_finished()
+        self.demo.on_finished()
         cv2.destroyAllWindows()
         cap.release()
+
+    def handle_key_interaction(self, key:int, frame:MatLike):
+        if key == ord("s"):
+            self.save_frame(frame)
+        if key == ord("d"):
+            self.demo.toggle_debug()
+        if key == KEYS.DOWN_ARROW or key == KEYS.UP_ARROW:
+            self.demo.set_slider_with_keys(key)
+            cv2.setTrackbarPos(self.demo.get_slider_name(), WINDOW, self.demo.slider_value)
+        if key == ord("r"):
+            self.demo.reset()
+    
+    # TODO show info about possible key interactions
 
     def prepare_video(self, frame:MatLike) -> tuple[MatLike]:
         """Rotate the video and find the US area"""
