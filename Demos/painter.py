@@ -7,11 +7,28 @@ from Helpers.Parameters import COLORS
 import random
 
 """
-MAIN implementation of Painter demo
+Main implementation of PAINTER DEMO:
+    - simple line drawing application
+        - can be used with a finger or any other hyperechoic (bright) object
+        -> dark "background" with bright "object"
+    - line strength or thickness changes depending on the area size of the detected object
+    - line breaks once the detected object isn't found anymore (or too small)
+CONTROLS:
+    - r = reset
+    - s = save (autosaves after a video ends)
+
+Ultrasound settings:
+    - basically, dimm the image
+        - reduce/change the amplification so that your finger is very visible, but very little else
+        - but should be pretty close to default settings
+    - Example /w Philips SDR-1200:
+        - Amplification of entire field: 40 (out of 60)
+        - Amplification of near field: 30
+        - Focus: Middle and Far (F1)
 """
 
-# TODO make adjustable ?
-BBOX_MIN_W = 10 # so that it doesn't detect bubbles
+# How big the detected bounding box needs to be at least
+BBOX_MIN_W = 10 # ignore bubbles
 BBOX_MIN_H = 10
 
 MAX_AREA_SIZE = 2000
@@ -22,6 +39,9 @@ DEFAULT_THRESH = 130
 THRESH_MAX = 255
 
 class Painter(Demo):
+    """Bundles the main functions of the painter demo, a simple line drawing application.
+    Detects a finger or similarly hyperechoic object and draws lines following it's movement."""
+
     def __init__(self) -> None:
         super().__init__()
         self.slider_value = DEFAULT_THRESH
@@ -122,7 +142,7 @@ class Line():
             start = self.points[i]
             end = self.points[i+1]
             cv2.line(frame, start, end, self.color, self.line_strengths[i])
- 
+
 
 # ----- MAIN ----- #
 # video = "../Data/heart.mp4"

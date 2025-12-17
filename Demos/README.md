@@ -4,13 +4,45 @@
 - detection parameters can easily be adapted to fit different videos (TODO)
 
 ## Setup
+1. Run the demos with the provided videos.
+   1. Nothing to set up. See [##Usage]
+2. Run the demos with your own ultrasound videos
+   1. Record a mp4 and drop it into the data folder
+   2. See [##Usage]
+3. Use a live ultrasound video feed
+   1. See the documentatio of [##My_Setup]
+   2. Good Luck
+
+### Setup Documentation
 <!-- Explain how detection works (what US machine, capture device, settings, capture software, ...) -->
+Required soft/hardware:
+- Ultrasound machine: 
+  - Philips Sono Diagnost R-1200 (SDR-1200)
+  - Probe LA 3510 (3.5 MHz)
+  - Lateral Resolution: 1.6 mm (for LA 3510)
+  - Full view field: 102 x 180 mm
+  - FPS: between 24.4 and 5.1 (depends on zoom factor and focus settings)
+  - 32 Graustufen
+- Capture Device:
+  - Easy Cap (Analoge to Digital)
+  - Windows 11 Driver
+- Capture software
+  - OBS Studio
+
+Workflow:
+- Get the video output of the ultrasound machine with a capture device
+- Capture with OBS
+  - Set the video to PAL_B
+  - Start a virtual camera
+- Start the demos in python
+  - Might have to change the `VIDEO_ID` in `Player.py` to match the virtual camera
 
 ## Usage
 - (run `py main.py -d 1` (number indicate the demo you want to run))
 - run from each Demo separately 
   - run `py demo-name.py` to run the demo using an existing demo-video or using a video stream (might have to change video id (in code))
   - run `py demo-name-py -src path/to/video.mp4` to run the demo using custom videos
+    - or change the paths in the files
 
 ## Overview
 Goals:
