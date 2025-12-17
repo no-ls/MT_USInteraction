@@ -8,7 +8,19 @@ from Helpers.Player import Player
 from Helpers.Parameters import COLORS
 
 """
-A simple Pong-type game
+Main implementation of the PONG Demo:
+    - simplified pong-type game inspired by ultrasound reflections
+    - ball falls down the play field and is reflected by hyperechoic objects (e.g. finger)
+
+Ultrasound settings:
+    - basically, dimm the image
+        - reduce/change the amplification so that your finger is very visible, but very little else
+        - but should be pretty close to default settings
+        - similar to painter.py
+    - Example /w Philips SDR-1200:
+        - Amplification of entire field: 40 (out of 60)
+        - Amplification of near field: 30
+        - Focus: Middle and Far (F1)
 """
 
 SENSOR_ARTIFACT_AREA = 100
@@ -36,6 +48,7 @@ class Game(Demo):
     
     def do_pong(self, frame:MatLike, contours):
         if self.image_h == None: pass
+        self.pong.set_area(self.us_area)
         self.pong.update(self.image_h, self.image_w, contours)
         self.pong.draw(frame, self.is_debug)
 
@@ -61,16 +74,21 @@ class Pong():
         self.reflection_line = []
         self.incidence_line = []
         self.has_reflected = False # so it doesn't bounce inside the contour
-        # self.direction = DOWN
+
+        self.us_area = None # the actual US area
 
     # ----- GAME LOGIC ----- #
 
-    def update(self, area_height, area_width, contours):
+    def set_area(self, area):
+        if area != None and self.us_area != None: return
+        self.us_area = area
+
+    def update(self, image_height, image_width, contours):
         if self.y > SENSOR_ARTIFACT_AREA: # ignore sensor-artifacts at the top
             self.check_collision(contours)
 
         self.x, self.y = self.calculate_new_xy((self.x, self.y), self.speed, self.reflection_angle)
-        self.check_oob(area_height, area_width)
+        self.check_oob(image_height, image_width)
 
     def check_oob(self, area_height, area_width):
         """Check if the Ball is out of bounds of the screen"""
@@ -104,8 +122,6 @@ class Pong():
         for contour in contours:
             result = cv2.pointPolygonTest(contour, (self.x, self.y), False) 
 
-            # TODO implement failsave -> too many reflections aka, if got stuck
-
             if result >= 1 and not self.has_reflected: # i.e on the line or inside the contour
                 self.has_reflected = True
 
@@ -132,6 +148,7 @@ class Pong():
                 self.has_reflected = False
                 print("reset reflection")
 
+    # TODO: rm
     def calculate_reflection_1(self, start:list[int], end:list[int], direction=-1):
         """TEST
         via: ChatGPT (I have the start and endpoints for two lines, the incidence line and the mirror line. 
@@ -172,7 +189,7 @@ class Pong():
         self.collision_line[:] = [start, end]
 
     def calculate_reflection(self, start:list[int], end:list[int], direction=-1):
-        """Calculate the reflection off of a line"""
+        """Calculate the reflection off of a line, based on the incident angle and collision line"""
 
         # calculate the slope of the collision line
         collision_slope = self.get_slope(start[0], start[1], end[0], end[1])
@@ -228,16 +245,18 @@ class Pong():
     # ----- GAME HELPERS ----- # 
 
     def reset(self, soft_reset=False):
-        if not soft_reset:
+        if not soft_reset: # keep reflections going
             self.x = self.x0
             self.y = self.y0
         self.reflection_angle = math.radians(DEGREES_90)
-        self.speed = 8
+        self.speed = 8 # randomize ?
         self.incidence_start = [self.x0, self.y0]
-        # self.direction = DOWN#
-        # self.x = random.randint(80, 400) # TODO offset to keep in play area
+        self.update_spawn_point()
         # self.radius = random.randint(5, 20)
-        # self.speed = random.randint(5, 15)
+
+    def update_spawn_point(self):
+        """Randomly set the spawn point within the actual ultrasound area"""
+        self.x = random.randint(self.us_area.x, self.us_area.w)
 
     def draw(self, frame, debug=False)-> None:
         cv2.circle(frame, (self.x, self.y), self.radius, self.color, -1)        
