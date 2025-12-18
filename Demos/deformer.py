@@ -32,6 +32,8 @@ MIN_AREA_SIZE = 5000
 
 AXIS_OFFSET = 2
 
+MIN_CLICK_REQUIREMENT = 50
+
 # TODO: ignore too small changes in the contour/ellipse
 
 class Deformer(Demo):
@@ -50,7 +52,23 @@ class Deformer(Demo):
         self.monitor_w = 0
         self.monitor_h = 0
         self.set_monitor_dimensions() # evtl. use package screeninfo
-        
+
+        self.prev_major = None
+        self.prev_minor = None
+        self.prev_diff = None
+        self.is_spasm = False
+
+        self.default_axises = []
+        self.default_axis = None
+
+        self.default_majors = []
+        self.default_minors = []
+        self.default_major = None
+        self.default_minor = None
+        self.default_angle = None
+
+        self.squish = 0
+        self.squash = 0
 
     # evtl. use package screeninfo
     def set_monitor_dimensions(self) -> tuple[int]:
@@ -78,40 +96,70 @@ class Deformer(Demo):
         # fit a ellipse around the contour to approximate the shape of the ball   
         ellipse = cv2.fitEllipse(biggest)
         (center_x, center_y), (axis1, axis2), angle = ellipse
-        cv2.ellipse(frame,ellipse,COLORS.BLUE,2)
+        cv2.ellipse(frame, ellipse,COLORS.BLUE,2)
         cv2.circle(frame, (int(center_x), int(center_y)), 5, COLORS.BLUE, -1) 
 
         major = max(axis1, axis2)
         minor = min(axis1, axis2)
 
-        # TODO: if changes to major/minor is too small, than don't change
+        # ===== INTERACTION ===== #
 
-        # -- INTERACTION -- #
-
+        # -- MOUSE Interaction -- # 
+        
         mouse_x, mouse_y = self.translate_mouse_coordinates(center_x, center_y)
         mouse.move(mouse_x, mouse_y, absolute=True, duration=0)
 
-        # pyautogui.move(center_x, center_y, duration=1, tween=pyautogui.easeInOutQuad)
-        # pyautogui.moveTo(center_x, center_y, duration=0) -> has bad performance for some reason
+        # -- CLICK Interaction -- #
 
-        if major >= minor + SQUISH_AXIS_LENGTH and not self.has_squish_clicked:
-            print("SQUISH == LEFT CLICK")
-            self.has_squish_clicked = True
-            if not self.is_debug: mouse.right_click()
-        elif major >= SQUASH_AXIS_LENGTH and minor >= SQUASH_AXIS_LENGTH and not self.has_squash_clicked:
-            print("SQUASH == RIGHT CLICK")
-            self.has_squash_clicked = True
-            if not self.is_debug: mouse.click()
+        # Get default values
+        # TODO: make reset-able (r)
+        if len(self.default_majors) < 10:
+            self.default_minors.append(minor)
+            self.default_majors.append(major)
+            return frame
+        elif self.default_major == None:
+            self.default_major = int(np.average(self.default_majors))
+            self.default_minor = int(np.average(self.default_minors))
+            self.default_angle = angle
+
+        # draw default ellipse
+        default_ellipse = (center_x, center_y), (self.default_major, self.default_minor), self.default_angle
+        cv2.ellipse(frame, default_ellipse, COLORS.BLACK, 2)
+        default_text = f"set default ellipse (black) - reset with 'r'"
+        self.write_text(frame, default_text, (10, 40))
         
-        # RESET clicks
-        elif self.has_squash_clicked and major <= SQUASH_AXIS_LENGTH:
-            self.has_squash_clicked = False
-            # print("reset SQUASH click", minor, major)
-        elif self.has_squish_clicked and major < minor + SQUISH_AXIS_LENGTH and minor > major - SQUISH_AXIS_LENGTH: # == circle
-            self.has_squish_clicked = False
-            # print("reset SQUISH click", minor, major)
-            # tweaks out slightly
-        
+        # get normalized values for better (size independent) comparison
+        aspect_ratio = major / minor
+        scale = (major + minor) / (self.default_major + self.default_minor)
+        self.write_text(frame, f"R: {round(aspect_ratio, 2)} / S: {round(scale, 2)}", (int(center_x), int(center_y)))
+
+        if aspect_ratio > 1.2 and not self.has_squish_clicked: 
+            # SQUISH
+            cv2.ellipse(frame, ellipse,COLORS.GREEN, 2) # feedback
+            if self.squish > MIN_CLICK_REQUIREMENT: # TODO make framerate dependent
+                self.has_squish_clicked = True
+            self.squish += 1
+        elif aspect_ratio < 1.1 and scale > 1.2 and not self.has_squash_clicked:
+            # SQUASH
+            cv2.ellipse(frame, ellipse,COLORS.PURPLE, 2) # feedback
+            if self.squash > MIN_CLICK_REQUIREMENT:
+                self.has_squash_clicked = True
+            self.squash += 1
+        else:
+            if self.has_squish_clicked:
+                self.has_squish_clicked = False
+                print("RIGHT CLICK")
+                # mouse.right_click()
+            elif self.has_squash_clicked:
+                self.has_squash_clicked = False
+                print("LEFT CLICK")
+                # mouse.click()
+                
+            # reset if back to "default" state
+            self.squish = 0
+            self.squash = 0
+
+        # print(self.squish, self.squash)
         return frame
     
     def translate_mouse_coordinates_old(self, x:int, y:int)-> tuple[int]:
@@ -200,15 +248,31 @@ def do_color_quantization(img:MatLike, gray:MatLike, value:int=7):
     result = result.clip(0,255).astype(np.uint8)
     return result
 
+# TODO adjust params to work with different zoom factors
+    # e.g. take first occurrence of ball and use as default values
 
 # ----- MAIN ----- #
 # video = "../Data/stressball.mp4"
 video = "../Data/stress_deform2.mp4"
-# video = "../Data/stress_movement.mp4"
+# video = "../Data/stress_x1.mp4"
+# video = "../Data/stress_x15.mp4"
 player = Player(Deformer(), video)
 player.start_player()
 
 # ---------------------------------
+
+"""
+# SQUISH
+# if axis_diff >= (self.default_axis / 2):
+#     cv2.ellipse(frame, ellipse,COLORS.GREEN, 2)
+#     self.write_text(frame, f"SQUISH: {axis_diff}", (int(center_x), int(center_y)))
+#     self.has_squish_clicked = True 
+# # SQUASH
+# elif major_diff > (self.default_axis / 2) and minor_diff > (self.default_axis / 3):
+#     cv2.ellipse(frame, ellipse,COLORS.PURPLE, 2)
+#     self.write_text(frame, f"SQUASH: {major_diff}/{minor_diff}", (int(center_x), int(center_y)))
+#     self.has_squash_clicked = True
+"""
 
 # OLD Version (keep for now...)
 def do_old(self, frame: MatLike, masked: MatLike) -> MatLike:
