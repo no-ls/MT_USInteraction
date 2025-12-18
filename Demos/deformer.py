@@ -129,17 +129,23 @@ class Deformer(Demo):
         self.write_text(frame, default_text, (10, 40))
         
         # get normalized values for better (size independent) comparison
-        aspect_ratio = major / minor
-        scale = (major + minor) / (self.default_major + self.default_minor)
-        self.write_text(frame, f"R: {round(aspect_ratio, 2)} / S: {round(scale, 2)}", (int(center_x), int(center_y)))
+        # aspect_ratio = major / minor
+        # scale = (major + minor) / (self.default_major + self.default_minor)
+        # self.write_text(frame, f"R: {round(aspect_ratio, 2)} / S: {round(scale, 2)}", (int(center_x), int(center_y)))
 
-        if aspect_ratio > 1.2 and not self.has_squish_clicked: 
+        distortion = np.log(major / minor)
+        scale_log = np.log((major + minor) / (self.default_major + self.default_minor))
+        self.write_text(frame, f"D: {round(distortion, 2)} / S: {round(scale_log, 2)}", (int(center_x), int(center_y)))
+
+        # if aspect_ratio > 1.2 and not self.has_squish_clicked:
+        if distortion > 0.3 and not self.has_squish_clicked: 
             # SQUISH
             cv2.ellipse(frame, ellipse,COLORS.GREEN, 2) # feedback
             if self.squish > MIN_CLICK_REQUIREMENT: # TODO make framerate dependent
                 self.has_squish_clicked = True
             self.squish += 1
-        elif aspect_ratio < 1.1 and scale > 1.2 and not self.has_squash_clicked:
+        # elif aspect_ratio < 1.1 and scale > 1.2 and not self.has_squash_clicked:
+        elif distortion < 0.1 and scale_log > 0.35 and not self.has_squash_clicked:
             # SQUASH
             cv2.ellipse(frame, ellipse,COLORS.PURPLE, 2) # feedback
             if self.squash > MIN_CLICK_REQUIREMENT:
@@ -159,7 +165,6 @@ class Deformer(Demo):
             self.squish = 0
             self.squash = 0
 
-        # print(self.squish, self.squash)
         return frame
     
     def translate_mouse_coordinates_old(self, x:int, y:int)-> tuple[int]:
