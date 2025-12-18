@@ -24,15 +24,9 @@ NOTEs
     - C) just visualize the interaction -> e.g. squash increases amount, squish decreases
 """
 
-# How long/short the axises of the ellipse are to differentiate
-SQUISH_AXIS_LENGTH = 80
-SQUASH_AXIS_LENGTH = 300 
-
 MIN_AREA_SIZE = 5000
-
-AXIS_OFFSET = 2
-
 MIN_CLICK_REQUIREMENT = 50
+MIN_DEFAULT_ELLIPSE_REQUIREMENT = 20
 
 # TODO: ignore too small changes in the contour/ellipse
 
@@ -113,14 +107,8 @@ class Deformer(Demo):
 
         # Get default values
         # TODO: make reset-able (r)
-        if len(self.default_majors) < 10:
-            self.default_minors.append(minor)
-            self.default_majors.append(major)
-            return frame
-        elif self.default_major == None:
-            self.default_major = int(np.average(self.default_majors))
-            self.default_minor = int(np.average(self.default_minors))
-            self.default_angle = angle
+        has_set = self.set_default_ellipse(major, minor, angle)
+        if not has_set: return frame
 
         # draw default ellipse
         default_ellipse = (center_x, center_y), (self.default_major, self.default_minor), self.default_angle
@@ -167,6 +155,18 @@ class Deformer(Demo):
 
         return frame
     
+    def set_default_ellipse(self, major, minor, angle):
+        """Gather the major and minor axis for a set amount of time and then set their average as default"""
+        if len(self.default_majors) < MIN_DEFAULT_ELLIPSE_REQUIREMENT:
+            self.default_minors.append(minor)
+            self.default_majors.append(major)
+            return False
+        elif self.default_major == None:
+            self.default_major = int(np.average(self.default_majors))
+            self.default_minor = int(np.average(self.default_minors))
+            self.default_angle = angle
+        return True
+    
     def translate_mouse_coordinates_old(self, x:int, y:int)-> tuple[int]:
         """Translate the coordinates to fit the current screen"""
         if self.image_h == None or self.monitor_w == None:
@@ -188,6 +188,17 @@ class Deformer(Demo):
         mouse_x = (x - self.us_area.x) * (self.monitor_w / self.us_area.w)
         mouse_y = (y - self.us_area.y) * (self.monitor_h / self.us_area.h)
         return mouse_x, mouse_y
+    
+    # ----- other DEMO Class functions ----- #
+    
+    def reset(self):
+        """Reset the default ellipse parameters"""
+        self.default_majors = []
+        self.default_minors = []
+        self.default_major = None
+        self.default_minor = None
+        self.default_angle = None
+        print("resetting the default ellipse")
 
 # ----- HELPERS -----  #
 
