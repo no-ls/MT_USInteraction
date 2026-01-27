@@ -2,3 +2,6 @@ __pycache__
 .venv
 Data
 OpenCV-examples
+Tests
+gesturer-old.py
+visualizer-old.py

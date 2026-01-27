@@ -164,7 +164,7 @@ class Player():
         gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
         changed_area = self.area.update_US_area(gray, self.demo.us_area_threshold)
         if changed_area: 
-            self.demo.set_US_area(self.area)
+            self.demo.set_US_area(self.area) # ?
         roi = self.area.mask_US_area(src)
         return (src, roi)
     
