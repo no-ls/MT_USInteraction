@@ -43,6 +43,7 @@ SUBTRACT BACKGROUND
     - try PIV Techniques
         - funktioniert auch nicht so viel besser
 ADAPTIVE THRESHOLD
+    - downsampling helps, when you don't upsample before the optical flow
     - regular blurring does not help as much as downsampling + morph op does
     - kann keine Unterschied zw. Gaussian und Mean C sehen
     - better than regular one
@@ -57,79 +58,141 @@ GET FLOW:
     - segment bubbles, then sparse optical flow
         -> only segment on first frame
     - dense optical flow on entire frame
-GET GESTURE:
-    - Richtungsvektoren von den größten Flächen kriegen, und dann daraus Form erstellen?
-    - Richtungsvektoren von größter Fläche frame für frame aneinander pappen?
-    - Track one "color" and record movement -> translate to shape
+DEMO:
+    - draw boat, that gets carried by the flow
+    - -> move with flow vector at pixel
 """
-
-# ??? use the contours to track instead of optical flow
 
 class Gesturer(Demo):
     def __init__(self) -> None:
         super().__init__()
-        # Parameters for lucas kanade optical flow
-        self.lk_params = dict( winSize  = (15, 15),
-                  maxLevel = 2,
-                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-        self.feature_params = dict( maxCorners = 100,
-                       qualityLevel = 0.3,
-                       minDistance = 7,
-                       blockSize = 7 )
-        self.prev = []
-        self.color = np.random.randint(0, 255, (100, 3))
-        self.mags = []
-        self.backsub = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
-        self.backsub2 = cv2.createBackgroundSubtractorKNN(detectShadows=False)
+        self.radius = 7
 
-        # self.slider_value = 130
-        # self.slider_max = 255
+        self.prev = []
+        self.point = (0, 0)
+        self.reset_counter = 0
+
+    def init_point(self, masked:MatLike):
+        if self.point == (0,0):
+            h, w = masked.shape
+            self.point = (int(w/2), int(h/2))
+
+    def reset(self):
+        print("reset point")
+        self.point = (0,0)
 
     def do(self, frame:MatLike, masked:MatLike) -> MatLike:
         # super().do(frame, masked)
 
-        src = cv2.pyrDown(masked)
-        src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+        small = cv2.pyrDown(masked)
+        src = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        
+        self.init_point(src)
 
-        src = cv2.medianBlur(src,11) # does not do that much
-        # src = cv2.bilateralFilter(src,9,75,75) # ?? does not do that much either
-        # src = cv2.GaussianBlur(src,(5,5),0)
-        op = cv2.adaptiveThreshold(src,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV,11,2) # does help with bg removal
-        # ret2, op = cv2.threshold(src,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU) # nope
-        # op = cv2.adaptiveThreshold(src, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+        src = cv2.medianBlur(src,7) 
+        op = cv2.adaptiveThreshold(src,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV,11,2)
 
         kernel = np.ones((5,5),np.uint8)
-        # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3))
         op = cv2.morphologyEx(op, cv2.MORPH_CLOSE, kernel)
-
-        # op = cv2.pyrUp(op)
 
         h, w = op.shape
         blank = np.zeros((h,w,3), np.uint8)
-        # blank = cv2.cvtColor(blank, cv2.COLOR_GRAY2BGR)
 
-        # TODO: try opencv Trackers instead (e.g. https://pyimagesearch.com/2018/07/30/opencv-object-tracking/, https://github.com/opencv/opencv_contrib/blob/master/modules/tracking/samples/tracker.py)
+        # ===== TRACKING ===== # 
 
-        # Do optical flow
-        lk = True
-        if not lk:
-            op, flow = self.dense_OF(op)
-            if len(flow) == 1: return src
+        op, flow = self.dense_OF(op)
+        if len(flow) == 1: return src
+
+        # == INTERACTION == #
+
+        out = small
+        # out = cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
+        self.animate_motion(out, flow)
+        # thresh = self.handle_oob(out)
+
+        # == VIEWING == 
+
+        if self.is_debug: # show flow
+            # out = op # cv frame
+            # out = cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
+            self.draw_flow(out, flow)
+
+        out = cv2.pyrUp(out)
+       # super().do(src, src)
+        return out
+    
+    def animate_motion(self, frame:MatLike, flow):
+        """Kinda, like this, but this not that good"""
+        mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1], angleInDegrees=True)
+
+        # ----
+
+        # get one motion vector and move from it to the next one it's pointing to
+        # start in center of image and move with circles
+        x, y = self.point
         
-            op = cv2.cvtColor(op, cv2.COLOR_GRAY2BGR)
-            if self.is_debug: op = blank
-            self.draw_flow(op, flow)
-        else:
-            contours, op = self.segment(op)
-            src = self.LK_OF(op)
+        # reset
+        if x == 0 and y == 0:
+            x = 100 # int(w/2)
+            y = 240 # int(h/2)
+
+        # move point using optical flow vectors
+        point_mag = mag[y, x]
+        # print("p-mag", point_mag)
+        # point_ang = ang[y, x]
+
+        if self.reset_counter >= 20:
+            self.reset_counter = 0
+            self.reset()
+            new_x, new_y = self.point
+
+        # skip if mag too low
+        elif point_mag >= 0.5:
+
+            # get 4 neighboring points around center
+            offset = int(self.radius/2)
+            top_fx, top_fy = flow[y+offset, x]
+            left_fx, left_fy = flow[y, x-offset]
+            bot_fx, bot_fy = flow[y-offset, x]
+            right_fx, right_fy = flow[y,x+offset]  
+            point_fx, point_fy = flow[y, x] # center
             
-        # frame = cv2.pyrUp(frame)
+            # and average for smoother movement
+            avg_fx = np.average([top_fx, left_fx, bot_fx, right_fx, point_fx])
+            avg_fy = np.average([top_fy, left_fy, bot_fy, right_fy, point_fy])
 
+            fac   = 1.4
+            new_x = (int(x + avg_fx * fac))
+            new_y = (int(y + avg_fy * fac))
+            
+            self.reset_counter = 0
+        else:
+            new_x = x
+            new_y = y
+            self.reset_counter += 1
 
-        src = op
-        src = cv2.pyrUp(src)
-        # super().do(src, src)
-        return src
+        # DRAW
+        cv2.circle(frame, (new_x, new_y), self.radius, COLORS.RED, -1)
+        # self.write_text(frame, f"{int(new_x),int(new_y)}", (int(new_x),int(new_y)) )
+        self.point = (new_x, new_y)
+
+    def handle_oob(self, frame:MatLike):
+        x, y = self.point
+        
+        # find edge of field
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) 
+        _, thresh = cv2.threshold(gray, 20, 255, cv2.THRESH_BINARY)
+
+        contours, hierarchy = cv2.findContours(thresh, 1, 2)
+        cnt = contours[0]
+        x,y,w,h = cv2.boundingRect(cnt) # TODO
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
+
+        # if circle too close -> then nudge up
+
+        return frame
+
+    # --------------------------
     
     def dense_OF(self, frame:MatLike):
         """Calculate the dense optical flow of consecutive frames"""
@@ -144,33 +207,8 @@ class Gesturer(Demo):
         # fx = flow[..., 0]
         # fy = flow[..., 1]
         # mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1]) # magnitude and direction
-        # self.prev = next # ??? -> hat manchmal den Kreis drinn
+        self.prev = next # ?? -> damit geht's besser
         return frame, flow
-
-    def LK_OF(self, frame:MatLike):
-        """Calculate the Lucas Kanade to track some points (good features to track) with optical flow"""
-        masked = grayscale(frame)
-
-        if len(self.prev) == 0:
-            self.prev = masked
-            self.p0 = cv2.goodFeaturesToTrack(self.prev, mask=None, **self.feature_params)
-            self.mask = np.zeros_like(self.prev)
-            return masked
-        
-        p1, st, err = cv2.calcOpticalFlowPyrLK(self.prev, masked, self.p0, None, **self.lk_params)
-
-        # Select good points
-        if p1 is not None:
-            good_new = p1[st==1]
-            good_old = self.p0[st==1]
-
-        # draw the tracks
-        for i, (new, old) in enumerate(zip(good_new, good_old)):
-            a, b = new.ravel()
-            c, d = old.ravel()
-            cv2.line(frame, (int(a), int(b)), (int(c), int(d)), self.color[i].tolist(), 2) # lines
-            out = cv2.circle(frame, (int(a), int(b)), 5, self.color[i].tolist(), -1)
-        return out
 
     def draw_flow(self, frame:MatLike, flow):
         """Draw the optical flow direction vectors (via: ChatGPT)"""
@@ -452,8 +490,9 @@ def brightest_spot(value:int, img:MatLike, gray:MatLike):
     return [[x, y]]
 
 # ----- MAIN ----- #
-# video = "../Data/bubbles.mp4"
-video = "../Data/swirl.mp4"
+# video = "../Data/waterplay.mp4"
+video = "../Data/new_swirl3-yadif2.mp4"
+# video = "../Data/swirl.mp4"
 player = Player(Gesturer(), video)
 player.start_player()
 
