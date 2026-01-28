@@ -14,7 +14,7 @@ using: Open3D https://pypi.org/project/open3d/
     -> visualize Point Cloud https://www.open3d.org/docs/release/tutorial/geometry/pointcloud.html
     -> surface reconstruction (see: https://www.open3d.org/html/tutorial/Advanced/surface_reconstruction.html)
 """
-
+PROBE_ARTIFACT = 30
 
 class Scanner(Demo):
     def __init__(self) -> None:
@@ -24,6 +24,8 @@ class Scanner(Demo):
         self.pcds = []
         self.i = 1
         self.started = False
+
+        self.vis = o3d.visualization.Visualizer()
 
     # TODO: make work from video (show vis after video ended)
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
@@ -37,19 +39,26 @@ class Scanner(Demo):
         if key == KEYS.ENTER:
             print("starting scan")
             self.started = True
+            self.vis.create_window()
+
+        self.started = True # for testing
 
         if not self.started:
             self.write_text(frame, "Start scan with 'ENTER'", (20, 20))
             return frame
+        
 
         frame = self.scan(masked)            
         self.write_text(frame, "scanning...", (20, 20))
 
         return frame
     
-    
     def scan(self, masked:MatLike):
         """Capsules the scanning behavior"""
+
+        # mask very top
+        cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
+
         # extract contours and coordinates
         contours, frame = self.segment(masked)
         cv2.drawContours(frame, contours, -1, color=COLORS.RED, thickness=1)
@@ -70,19 +79,21 @@ class Scanner(Demo):
             # z-index am Ende anpassen -> z.B.: manuelle Eingabe, wie hoch Objekt ist
             # z.B.: mit Gehäuse (ähnlich wie oben)
         # -> both options -> wenns kein Anhaltspunkt, dann kann man manuell eingeben oder default z-wert
-
-        # TODO manuelle Eingabe und default wert
-        # TODO manueller Start -> um z.B.: Werte zu justieren
-
-        # NOTE: simulates scan -> only call when "video ends"
+        
         # stack a couple of contours at different z-levels (+ colors), then visualize
-        # if self.i < 200:
         r = 1.0 / self.i * 10
-        self.contours_to_3d(contours, self.i+2, (r, 0.0, 0.0))
+        # self.contours_to_3d(contours, self.i+2, (r, 0.0, 0.0))
+
+        # colors for better viewing
+        red = (1.0, 0.0, 0.0)
+        blue = (0.0, 0.0, 1.0)
+        if self.i % 2 == 0:
+            self.contours_to_3d(contours, self.i+2, red)
+        else:
+            self.contours_to_3d(contours, self.i+2, blue)
         self.i += 1
 
         return frame
-
 
     def contours_to_3d(self, contours, z_value, color:np.array):
         if len(contours) == 0: return
@@ -100,10 +111,29 @@ class Scanner(Demo):
         pcd.points = o3d.utility.Vector3dVector(pts3d)
         pcd.colors = o3d.utility.Vector3dVector(colors) # float64 (num_points, 3)
 
+        self.real_time_visualization(pcd)
+
         # save for later
         self.pcds.append(pcd)
 
+    def real_time_visualization(self, pcd):
+        """Try: Non-blocking visualization"""
+        # NOTE: prop better to not create a separate point cloud every time
+        # Try add_geometry(pcd) at begining, 
+        #   then keep appending points to it 
+        #   and update_geometry
+
+        self.vis.add_geometry(pcd)
+        self.vis.poll_events()
+        self.vis.update_renderer()
+        # else:
+            # self.vis.update_geometry(point_cloud)
+        # pass
+
     def on_finished(self, frame):
+        if not self.started:
+            print("No scan :(")
+            return
         print("[INFO] - Showing stacked point cloud")
         o3d.visualization.draw_geometries(self.pcds)
         # self.save()
