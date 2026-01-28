@@ -155,7 +155,9 @@ class Player():
             cv2.setTrackbarPos(self.demo.get_slider_name(), WINDOW, self.demo.slider_value)
         if key == ord("r"):
             self.demo.reset()
-    
+        elif key == ord(' '): # pause
+            key = cv2.waitKey()
+
     # TODO show info about possible key interactions
 
     def prepare_video(self, frame:MatLike) -> tuple[MatLike]:

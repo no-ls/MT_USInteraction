@@ -1,5 +1,6 @@
 class KEYS:
-    ESC     = 27
+    ENTER       = 13
+    ESC         = 27
     LEFT_ARROW  = 2424832
     UP_ARROW    = 2490368
     RIGHT_ARROW = 2555904
