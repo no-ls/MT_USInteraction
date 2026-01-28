@@ -26,8 +26,8 @@ class Scanner(Demo):
         self.started = False
 
         self.vis = o3d.visualization.Visualizer()
+        self.pcd = o3d.geometry.PointCloud()
 
-    # TODO: make work from video (show vis after video ended)
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         super().do(frame, masked)
 
@@ -39,7 +39,10 @@ class Scanner(Demo):
         if key == KEYS.ENTER:
             print("starting scan")
             self.started = True
+            
+            # start the non-blocking visualization
             self.vis.create_window()
+            self.vis.add_geometry(self.pcd)
 
         self.started = True # for testing
 
@@ -47,10 +50,9 @@ class Scanner(Demo):
             self.write_text(frame, "Start scan with 'ENTER'", (20, 20))
             return frame
         
-
-        frame = self.scan(masked)            
+        frame = self.scan(masked)    
         self.write_text(frame, "scanning...", (20, 20))
-
+        
         return frame
     
     def scan(self, masked:MatLike):
@@ -106,36 +108,26 @@ class Scanner(Demo):
         N = pts3d.shape[0]
         colors = np.tile(color, (N, 1))
 
-        # create a point cloud object
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pts3d)
-        pcd.colors = o3d.utility.Vector3dVector(colors) # float64 (num_points, 3)
+        # update the point cloud object
+        self.pcd.points.extend(o3d.utility.Vector3dVector(pts3d))
+        self.pcd.colors.extend(o3d.utility.Vector3dVector(colors)) # float64 (num_points, 3)
 
-        self.real_time_visualization(pcd)
+        self.update_visualization()
 
-        # save for later
-        self.pcds.append(pcd)
+    def update_visualization(self):
+        """using non-blocking visualization"""
+        # see for example: https://stackoverflow.com/a/74669788, https://stackoverflow.com/a/78009748
 
-    def real_time_visualization(self, pcd):
-        """Try: Non-blocking visualization"""
-        # NOTE: prop better to not create a separate point cloud every time
-        # Try add_geometry(pcd) at begining, 
-        #   then keep appending points to it 
-        #   and update_geometry
-
-        self.vis.add_geometry(pcd)
+        self.vis.update_geometry(self.pcd)
         self.vis.poll_events()
         self.vis.update_renderer()
-        # else:
-            # self.vis.update_geometry(point_cloud)
-        # pass
 
     def on_finished(self, frame):
         if not self.started:
             print("No scan :(")
             return
         print("[INFO] - Showing stacked point cloud")
-        o3d.visualization.draw_geometries(self.pcds)
+        o3d.visualization.draw_geometries([self.pcd])
         # self.save()
 
     def save(self):
