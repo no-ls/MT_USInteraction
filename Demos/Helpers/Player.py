@@ -73,6 +73,7 @@ class Player():
         self.area = None
         self.video = video
         self.area = US_Area()
+        self.us_area_threshold = US_AREA_THRESHOLD
 
         self.cap = None
 
@@ -116,6 +117,7 @@ class Player():
     def play_video(self, cap:cv2.VideoCapture):
 
         cv2.namedWindow(WINDOW)
+        cv2.createTrackbar("Area", WINDOW, self.demo.us_area_threshold, 255, self.demo.adjust_area)
         cv2.createTrackbar(self.demo.get_slider_name(), WINDOW, self.demo.slider_value,
                             self.demo.slider_max, self.demo.set_slider_input)
         

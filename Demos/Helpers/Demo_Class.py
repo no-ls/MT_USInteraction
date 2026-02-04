@@ -59,6 +59,9 @@ class Demo():
     def set_slider_input(self, input:int):
         self.slider_value = input
 
+    def adjust_area(self, input:int):
+        self.us_area_threshold = input
+
     def set_slider_with_keys(self, key):
         """update the slider value using the arrow keys"""
         if key == KEYS.DOWN_ARROW:
