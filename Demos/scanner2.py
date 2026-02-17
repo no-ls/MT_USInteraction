@@ -16,6 +16,9 @@ PROBE_ARTIFACT = 30
 SCAN_STRIP_WIDTH = 100
 DEFAULT_Z_DISTANCE = 1 # default distance between two z values
 
+MAX_COLOR_VALUE = 1.0
+MAX_DEPTH_VALUE = 200
+
 class Scanner(Demo):
     def __init__(self) -> None:
         super().__init__()
@@ -37,21 +40,27 @@ class Scanner(Demo):
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         super().do(frame, masked)
 
+        base = masked.copy() # basic, unaltered masked frame
+
+        # mask very top area (probe artifacts)
+        cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
+        contours, frame = self.segment(masked)
+
         if not self.start_scan:
-            self.write_text(masked, "Start scan with 'ENTER'", (20,40))
-            return masked
+            self.write_text(frame, "Start scan with 'ENTER'", (20,40))
+            return frame
     
         # ----- SCAN - PROCESS ----- # 
 
         # TODO fix debug view not showing
-        z = self.get_depth_value(masked)
+        z = self.get_depth_value(base)
 
         self.write_text(masked, "scanning...", (20, 40))
         self.write_text(masked, f"z = {z}", (20, 60))
 
         if z != None:
             self.prev_z = z
-            self.scan(masked, z)
+            self.scan(base, contours, z) # use unaltered frame
 
             # init the real time view of the visualization window (requires initial points)
             if not self.has_init_viz:
@@ -62,7 +71,7 @@ class Scanner(Demo):
         return masked
     
     # TODO: test with right side
-    def get_depth_value(self, masked:MatLike)->float:
+    def get_depth_value(self, masked:MatLike):
         """Map y-coordinates on the left/right side of the image to a depth value"""
         # NOTE: The scan bed has a diagonal measuring stick on the left and right side (going up/down)
                 # As the bed is lowered the stick will show up at a different y-value in the US image 
@@ -92,10 +101,6 @@ class Scanner(Demo):
 
         left_area = cv2.contourArea(left_max)
         # right_area = cv2.contourArea(right_max)
-
-        # if self.is_debug:
-        cv2.drawContours(masked, [left_max], -1, color=COLORS.RED, thickness=1)
-                # cv2.drawContours(masked, [right_max], -1, color=COLORS.RED, thickness=1)
 
         # if contours are big enough (ignore noise) calculate z-value
         if left_area > 700 :
@@ -143,33 +148,26 @@ class Scanner(Demo):
         gamma = 180 - alpha - beta
         # use law of sines (sinussatz) to get missing side a
         a = round( ( c / np.sin(np.deg2rad(gamma)) ) * np.sin(np.deg2rad(alpha)), 2 )
-        
         return a 
     
-    def scan(self, masked:MatLike, z):
+    def scan(self, masked:MatLike, contours, z):
         """Capsules the scanning behavior"""
 
-        # mask very top (scanner artifacts)
-        cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
+        # TODO map colors to z values (0-150/200)
 
-        masked = cv2.pyrDown(masked)
 
-        # extract contours and coordinates
-        contours, frame = self.segment(masked)
-        cv2.drawContours(frame, contours, -1, color=COLORS.RED, thickness=1)
-
-        frame = cv2.pyrUp(frame)
- 
         # colors for better viewing
-        red = (1.0, 0.0, 0.0)
-        blue = (0.0, 0.0, 1.0)
+        max_col = 1.0
+        max_z = 150
+        c = np.interp(z, [0, MAX_DEPTH_VALUE], [0, MAX_COLOR_VALUE])
+        blue = (0.3, 0.0, c)
+        red = (c, 0.0, 0.3)
+
         if self.i % 2 == 0:
             self.contours_to_3d(contours, z, red)
         else:
             self.contours_to_3d(contours, z, blue)
         self.i += 1
-
-        return frame
 
     def contours_to_3d(self, contours, z_value, color:np.array):
         if len(contours) == 0: return
