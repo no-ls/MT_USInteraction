@@ -19,6 +19,8 @@ DEFAULT_Z_DISTANCE = 1 # default distance between two z values
 MAX_COLOR_VALUE = 1.0
 MAX_DEPTH_VALUE = 200
 
+SIZE_SCAN_BED = 40000
+BED_DURATION = 100 # how long the scan bed need to be visible for
 # Angle at of the diagonal measuring stick /_ 
 DIAGONAL_ANGLE = 28.6 # in degrees
 
@@ -32,12 +34,15 @@ class Scanner(Demo):
         self.start_scan = False
         self.is_scan_bed = False
         self.was_scan_bed = False
+        self.bed_duration = 0
 
         self.has_init_viz = False
         self.vis = o3d.visualization.Visualizer()
         self.pcd = o3d.geometry.PointCloud()
 
         self.prev_z = 0
+        self.left_contour = None
+        self.right_contour = None
 
     def start(self):
         self.start_scan = True
@@ -50,32 +55,37 @@ class Scanner(Demo):
         # mask very top area (probe artifacts)
         cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
         contours, frame = self.segment(masked)
-        
-        # TODO
-        max_c = max(contours, key=cv2.contourArea) 
-        area = cv2.contourArea(max_c)
-        # print("A", area)
 
         if not self.start_scan:
-            self.write_text(frame, "Start scan with 'ENTER'", (20,40))
+            self.write_text(frame, "Start scan with 'ENTER'", (20, 40))
             return frame
-    
-        # ----- SCAN - PROCESS ----- # 
-        
-        # check for the scan bed, if its past the scan-area don't check again
-        if area >= 40000 and not self.was_scan_bed:
-            self.is_scan_bed = True
-            self.write_text(masked, "Detecting scan bed", (20, 80))
+
+        # ----- PRE - SCAN ----- # 
+
+        max_c = max(contours, key=cv2.contourArea) 
+        area = cv2.contourArea(max_c)
+
+        # check for the scan bed: 
+            # if it hasn't been detected yet, the scan does not start
+            # if its been detected and disappeared again, then start the scan
+        if area >= SIZE_SCAN_BED and not self.was_scan_bed: 
+            self.write_text(masked, "Detecting scan bed", (20, 40))
+            self.bed_duration += 1
+            if self.bed_duration > BED_DURATION:
+                self.write_text(masked, "Done!", (20, 60))
+                self.is_scan_bed = True
             return masked
-        elif area < 40000 and self.is_scan_bed:
+        elif area < SIZE_SCAN_BED and self.is_scan_bed:
             self.is_scan_bed = False
             self.was_scan_bed = True
+            self.bed_duration = 0
+        elif not self.was_scan_bed:
+            self.write_text(masked, "Waiting for scan bed", (20, 40))
+            return masked
 
-        # TODO on debug (here) show left/right depth measure contours
+        # ----- SCAN - PROCESS ----- # 
+
         z = self.get_depth_value(base)
-
-        self.write_text(masked, "scanning...", (20, 40))
-        self.write_text(masked, f"z = {z}", (20, 60))
 
         if z != None:
             self.prev_z = z
@@ -86,6 +96,12 @@ class Scanner(Demo):
                 self.vis.create_window()
                 self.vis.add_geometry(self.pcd)
                 self.has_init_viz = True
+
+        # ----- (DEBUG) INFO ----- #
+        if self.is_debug:
+            cv2.drawContours(masked, [self.left_contour, self.right_contour], -1, COLORS.GREEN, 1)
+        self.write_text(masked, "scanning...", (20, 40))
+        self.write_text(masked, f"z = {z}", (20, 60))
 
         return masked
     
@@ -117,6 +133,8 @@ class Scanner(Demo):
         # get the biggest contours
         left_max = max(left_contours,   key=cv2.contourArea)
         right_max = max(right_contours, key=cv2.contourArea) 
+        self.left_contour = left_max # for showing debug
+        self.right_contour = right_max 
 
         left_area = cv2.contourArea(left_max)
         right_area = cv2.contourArea(right_max)
