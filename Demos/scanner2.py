@@ -19,6 +19,9 @@ DEFAULT_Z_DISTANCE = 1 # default distance between two z values
 MAX_COLOR_VALUE = 1.0
 MAX_DEPTH_VALUE = 200
 
+# Angle at of the diagonal measuring stick /_ 
+DIAGONAL_ANGLE = 28.6 # in degrees
+
 class Scanner(Demo):
     def __init__(self) -> None:
         super().__init__()
@@ -45,6 +48,11 @@ class Scanner(Demo):
         # mask very top area (probe artifacts)
         cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
         contours, frame = self.segment(masked)
+        
+        # TODO
+        max_c = max(contours, key=cv2.contourArea) 
+        area = cv2.contourArea(max_c)
+        # print("A", area)
 
         if not self.start_scan:
             self.write_text(frame, "Start scan with 'ENTER'", (20,40))
@@ -52,7 +60,9 @@ class Scanner(Demo):
     
         # ----- SCAN - PROCESS ----- # 
 
-        # TODO fix debug view not showing
+        # TODO don't scan scan bed (HOW?)
+            # after enter area has to be bigger and then smaller than ~ 40000 -> dann erst scannen
+        
         z = self.get_depth_value(base)
 
         self.write_text(masked, "scanning...", (20, 40))
@@ -60,7 +70,7 @@ class Scanner(Demo):
 
         if z != None:
             self.prev_z = z
-            self.scan(base, contours, z) # use unaltered frame
+            self.parse_contours(base, contours, z) # use unaltered frame
 
             # init the real time view of the visualization window (requires initial points)
             if not self.has_init_viz:
@@ -70,7 +80,6 @@ class Scanner(Demo):
 
         return masked
     
-    # TODO: test with right side
     def get_depth_value(self, masked:MatLike):
         """Map y-coordinates on the left/right side of the image to a depth value"""
         # NOTE: The scan bed has a diagonal measuring stick on the left and right side (going up/down)
@@ -81,47 +90,51 @@ class Scanner(Demo):
         # black out the right side
         left = masked.copy()
         left = cv2.rectangle(left, (SCAN_STRIP_WIDTH, 0), (self.image_w, self.image_h), COLORS.BLACK, -1) # right side
-        left = cv2.rectangle(left, (0, 0), (self.image_w,200), COLORS.BLACK, -1) # top 
-        left = cv2.rectangle(left, (0, self.image_h-200), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
+        # left = cv2.rectangle(left, (0, 0), (self.image_w,200), COLORS.BLACK, -1) # top 
+        left = cv2.rectangle(left, (0, self.image_h-150), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
 
         # black out the left side
         right = masked.copy()
         right = cv2.rectangle(right, (0, 0), (self.image_w-SCAN_STRIP_WIDTH, self.image_h), COLORS.BLACK, -1) # left side
+        right = cv2.rectangle(right, (0, self.image_h-150), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
 
         # get the contours of the scan sticks
         _, left = cv2.threshold(left, 70, 255, cv2.THRESH_BINARY)
         left_contours, _ = cv2.findContours(left, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         _, right = cv2.threshold(right, 70, 255, cv2.THRESH_BINARY)
-        # right_contours, _ = cv2.findContours(right, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        right_contours, _ = cv2.findContours(right, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         # get the biggest contours
         left_max = max(left_contours,   key=cv2.contourArea)
-        # right_max = max(right_contours, key=cv2.contourArea) 
+        right_max = max(right_contours, key=cv2.contourArea) 
 
         left_area = cv2.contourArea(left_max)
-        # right_area = cv2.contourArea(right_max)
+        right_area = cv2.contourArea(right_max)
+
+        cv2.drawContours(masked, [left_max],-1, COLORS.PURPLE, 1)
+        cv2.drawContours(masked, [right_max],-1, COLORS.GREEN, 1)
 
         # if contours are big enough (ignore noise) calculate z-value
+        left_z = 0
+        right_z = 0
         if left_area > 700 :
             left_y = self.get_center_Y(left_max)
             left_y = self.find_US_y(left_y)
             left_z = self.calculate_depth(left_y)
-        # if right_area > 700 :
-        #     right_y = self.get_center_Y(right_max)
-        #     right_y = self.find_US_y(right_y)
-        #     right_z = self.calculate_depth(right_y)
-        else: # update a previous value or drop
+        if right_area > 700 :
+            right_y = self.get_center_Y(right_max)
+            right_y = self.find_US_y(right_y, inverse=True)
+            right_z = self.calculate_depth(right_y)
+        if left_area < 700 and right_area < 700: # update a previous value or drop
             if self.prev_z > 0: 
                 return self.prev_z + DEFAULT_Z_DISTANCE
             else: return # drop
 
-        return left_z # HACK
-
-        # return the new depth value
-        if left_z and right_z:
+        # return the new depth value            
+        if left_z != 0 and right_z != 0:
             return round(np.average([left_z, right_z]),2)
-        elif left_z and not right_z: 
+        elif left_z != 0 and right_z == 0: 
             return left_z
         else:
             return right_z
@@ -133,13 +146,16 @@ class Scanner(Demo):
             return cy
         return 0
     
-    def find_US_y(self, y):
+    def find_US_y(self, y, inverse=False):
         """Subtract the offset of the actual US scan area from the y coordinate"""
+        if inverse: # diagonal coming from back/bottom
+            return self.us_area.h - y
+        # diagonal coming from front/top
         return y - self.us_area.y
 
     def calculate_depth(self, y):
         """Use a (irl) y value to calculate the depth is represents (using triangulation)"""
-        alpha = 18 # degrees -> angle of between ground and irl diagonal |↗_|
+        alpha = DIAGONAL_ANGLE # degrees -> angle of between ground and irl diagonal |↗_|
         beta = 90 # degrees (right angle)
         c = y
         a = 0
@@ -150,15 +166,9 @@ class Scanner(Demo):
         a = round( ( c / np.sin(np.deg2rad(gamma)) ) * np.sin(np.deg2rad(alpha)), 2 )
         return a 
     
-    def scan(self, masked:MatLike, contours, z):
-        """Capsules the scanning behavior"""
-
-        # TODO map colors to z values (0-150/200)
-
-
+    def parse_contours(self, masked:MatLike, contours, z):
+        """Convert the contours to 3d point clouds and stack them at different heights"""
         # colors for better viewing
-        max_col = 1.0
-        max_z = 150
         c = np.interp(z, [0, MAX_DEPTH_VALUE], [0, MAX_COLOR_VALUE])
         blue = (0.3, 0.0, c)
         red = (c, 0.0, 0.3)
@@ -171,7 +181,7 @@ class Scanner(Demo):
 
     def contours_to_3d(self, contours, z_value, color:np.array):
         if len(contours) == 0: return
-        # parse th contours into the right format
+        # parse the contours into the right format
         cnts = np.vstack(contours).squeeze(1) 
         pts = cnts.astype(np.float64)
         pts3d = np.hstack([pts, np.full((pts.shape[0], 1), z_value)])
@@ -196,9 +206,9 @@ class Scanner(Demo):
         self.vis.update_renderer()
 
     def on_finished(self, frame):
-        # if not self.started:
-            # print("No scan :(")
-            # return
+        if not self.started:
+            print("No scan :(")
+            return
         print("[INFO] - Showing stacked point cloud")
         o3d.visualization.draw_geometries([self.pcd])
 
@@ -207,6 +217,7 @@ class Scanner(Demo):
         o3d.io.write_point_cloud(f"../Data/Models/cloud-{time.time()}.pcd", self.pcd)
 
 # ----- MAIN ----- #
-video = "../Data/scan-test-diagonal1.mp4"
+# video = "../Data/scan-test-diagonal1.mp4"
+video = "../Data/scan4.mp4"
 player = Player(Scanner(), video)
 player.start_player()

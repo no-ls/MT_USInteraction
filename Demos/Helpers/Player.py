@@ -157,8 +157,10 @@ class Player():
             cv2.setTrackbarPos(self.demo.get_slider_name(), WINDOW, self.demo.slider_value)
         if key == ord("r"):
             self.demo.reset()
-        elif key == ord(' '): # pause
+        if key == ord(' '): # pause
             key = cv2.waitKey()
+        if key == KEYS.ENTER:
+            self.demo.start()
 
     # TODO show info about possible key interactions
 

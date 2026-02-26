@@ -114,6 +114,10 @@ class Demo():
     def reset(self):
         print("Nothing to reset...")
 
+    @abstractmethod
+    def start(self):
+        print("Noting to start...")
+
     # ----- ALGORITHM - STUFF ----- #
 
     def pre_tasks(self, frame:MatLike, masked:MatLike):
