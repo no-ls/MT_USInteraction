@@ -25,8 +25,9 @@ NOTEs
 """
 
 MIN_AREA_SIZE = 5000
-MIN_CLICK_REQUIREMENT = 50
+MIN_CLICK_REQUIREMENT = 20
 MIN_DEFAULT_ELLIPSE_REQUIREMENT = 20
+PROBE_ARTIFACT = 30
 
 # TODO: ignore too small changes in the contour/ellipse
 
@@ -48,6 +49,11 @@ class Deformer(Demo):
         self.squish = 0
         self.squash = 0
 
+        self.slider_max = 20 # 255
+        self.slider_value = 1 # 50
+
+        self.us_area_threshold = 30
+
     # evtl. use package screeninfo
     def set_monitor_dimensions(self) -> tuple[int]:
         self.monitor_w, self.monitor_h = pyautogui.size()
@@ -55,6 +61,18 @@ class Deformer(Demo):
     def do(self, frame:MatLike, masked:MatLike) -> MatLike:
         """Fit a ellipse over the contours to approximate the shape and compare axis"""
         super().do(frame, masked)
+
+        # mask top
+        cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
+
+        # NOTE: Alternatively: Threshold
+        # thresh, ret = cv2.threshold
+        # gray = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
+        # gray = cv2.GaussianBlur(gray, (5,5), 0) 
+        # _, thresh = cv2.threshold(gray, self.slider_value, 255, cv2.THRESH_BINARY)
+        # contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        # cv2.drawContours(frame, contours, -1, COLORS.PURPLE, 1)
+        # return thresh
         
         contours, frame = self.segment(masked)
         if len(contours) < 1: return frame
@@ -68,6 +86,10 @@ class Deformer(Demo):
         # concatenate 2nd biggest contour for better contours
         if len(contours) >= 2 and cv2.contourArea(contours[-2]) > 500:
             biggest = np.concatenate((biggest, contours[-2]))
+
+        # draw biggest contour(s)
+        if self.is_debug:
+                cv2.drawContours(frame, biggest, -1, COLORS.RED, 2)
 
         # -- DETECTION -- #
 
@@ -84,8 +106,9 @@ class Deformer(Demo):
 
         # -- MOUSE Interaction -- # 
         
-        mouse_x, mouse_y = self.translate_mouse_coordinates(center_x, center_y)
-        mouse.move(mouse_x, mouse_y, absolute=True, duration=0)
+        if not self.is_debug:
+            mouse_x, mouse_y = self.translate_mouse_coordinates(center_x, center_y)
+            mouse.move(mouse_x, mouse_y, absolute=True, duration=0)
 
         # -- CLICK Interaction -- #
 
@@ -95,28 +118,24 @@ class Deformer(Demo):
 
         # draw default ellipse
         default_ellipse = (center_x, center_y), (self.default_major, self.default_minor), self.default_angle
-        cv2.ellipse(frame, default_ellipse, COLORS.BLACK, 2)
+        # cv2.ellipse(frame, default_ellipse, COLORS.BLACK, 2)
         default_text = f"set default ellipse (black) - reset with 'r'"
         self.write_text(frame, default_text, (10, 40))
-        
-        # get normalized values for better (size independent) comparison
-        # aspect_ratio = major / minor
-        # scale = (major + minor) / (self.default_major + self.default_minor)
-        # self.write_text(frame, f"R: {round(aspect_ratio, 2)} / S: {round(scale, 2)}", (int(center_x), int(center_y)))
-
+    
         distortion = np.log(major / minor)
         scale_log = np.log((major + minor) / (self.default_major + self.default_minor))
-        self.write_text(frame, f"D: {round(distortion, 2)} / S: {round(scale_log, 2)}", (int(center_x), int(center_y)))
+        scale_log = np.abs(scale_log)
 
         # if aspect_ratio > 1.2 and not self.has_squish_clicked:
+        # NOTE: Values can be very situation -> might require adapting
         if distortion > 0.3 and not self.has_squish_clicked: 
             # SQUISH
             cv2.ellipse(frame, ellipse,COLORS.GREEN, 2) # feedback
-            if self.squish > MIN_CLICK_REQUIREMENT: # TODO make framerate dependent
+            if self.squish > MIN_CLICK_REQUIREMENT: # HACK: better make framerate dependent
                 self.has_squish_clicked = True
             self.squish += 1
         # elif aspect_ratio < 1.1 and scale > 1.2 and not self.has_squash_clicked:
-        elif distortion < 0.1 and scale_log > 0.35 and not self.has_squash_clicked:
+        elif distortion < 0.1 and scale_log > 0.15 and not self.has_squash_clicked:
             # SQUASH
             cv2.ellipse(frame, ellipse,COLORS.PURPLE, 2) # feedback
             if self.squash > MIN_CLICK_REQUIREMENT:
@@ -175,8 +194,9 @@ class Deformer(Demo):
 
 # ----- MAIN ----- #
 # video = "../Data/stressball.mp4"
-video = "../Data/stress_deform2.mp4"
-# video = "../Data/stress_x1.mp4"
+# video = "../Data/stress_deform2.mp4"
+# video = "../Data/stress-new-g40.mp4"
+video = "../Data/stress_x1.mp4"
 # video = "../Data/stress_x15.mp4"
 player = Player(Deformer(), video)
 player.start_player()
