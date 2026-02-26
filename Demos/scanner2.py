@@ -44,8 +44,13 @@ class Scanner(Demo):
         self.left_contour = None
         self.right_contour = None
 
+        self.do_freehand_scan = False
+
     def start(self):
         self.start_scan = True
+    
+    def free_key_interaction(self):
+        self.do_freehand_scan = True
 
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         super().do(frame, masked)
@@ -58,6 +63,18 @@ class Scanner(Demo):
 
         if not self.start_scan:
             self.write_text(frame, "Start scan with 'ENTER'", (20, 40))
+            if self.do_freehand_scan:
+                self.write_text(frame, "Do freehand scan", (20, 60))
+            else:
+                self.write_text(frame, "Press 'f' for freehand scan", (20, 60))
+            return frame
+        
+        # Option to du freehand scan (i.e. without scan diagonals)
+        if self.do_freehand_scan:
+            self.write_text(masked, "scanning (freehand)...", (20, 40))
+            self.parse_contours(base, contours, self.prev_z) # use unaltered frame
+            self.init_viz()
+            self.prev_z += 1
             return frame
 
         # ----- PRE - SCAN ----- # 
@@ -90,12 +107,11 @@ class Scanner(Demo):
         if z != None:
             self.prev_z = z
             self.parse_contours(base, contours, z) # use unaltered frame
-
-            # init the real time view of the visualization window (requires initial points)
-            if not self.has_init_viz:
-                self.vis.create_window()
-                self.vis.add_geometry(self.pcd)
-                self.has_init_viz = True
+            self.init_viz()
+            # if not self.has_init_viz:
+            #     self.vis.create_window()
+            #     self.vis.add_geometry(self.pcd)
+            #     self.has_init_viz = True
 
         # ----- (DEBUG) INFO ----- #
         if self.is_debug:
@@ -104,6 +120,14 @@ class Scanner(Demo):
         self.write_text(masked, f"z = {z}", (20, 60))
 
         return masked
+    
+    def init_viz(self):
+        """init the real time view of the visualization window (requires initial points), if not yet done"""
+        if not self.has_init_viz:
+            self.vis.create_window()
+            self.vis.add_geometry(self.pcd)
+            self.has_init_viz = True
+
     
     def get_depth_value(self, masked:MatLike):
         """Map y-coordinates on the left/right side of the image to a depth value"""

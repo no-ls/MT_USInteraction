@@ -118,6 +118,10 @@ class Demo():
     def start(self):
         print("Noting to start...")
 
+    @abstractmethod
+    def free_key_interaction(self):
+        print("Nothing is set...")
+
     # ----- ALGORITHM - STUFF ----- #
 
     def pre_tasks(self, frame:MatLike, masked:MatLike):

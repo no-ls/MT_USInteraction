@@ -161,6 +161,8 @@ class Player():
             key = cv2.waitKey()
         if key == KEYS.ENTER:
             self.demo.start()
+        if key == ord("f"):
+            self.demo.free_key_interaction()
 
     # TODO show info about possible key interactions
 
