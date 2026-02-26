@@ -30,6 +30,8 @@ class Scanner(Demo):
         self.pcds = []
         self.i = 1
         self.start_scan = False
+        self.is_scan_bed = False
+        self.was_scan_bed = False
 
         self.has_init_viz = False
         self.vis = o3d.visualization.Visualizer()
@@ -59,10 +61,17 @@ class Scanner(Demo):
             return frame
     
         # ----- SCAN - PROCESS ----- # 
-
-        # TODO don't scan scan bed (HOW?)
-            # after enter area has to be bigger and then smaller than ~ 40000 -> dann erst scannen
         
+        # check for the scan bed, if its past the scan-area don't check again
+        if area >= 40000 and not self.was_scan_bed:
+            self.is_scan_bed = True
+            self.write_text(masked, "Detecting scan bed", (20, 80))
+            return masked
+        elif area < 40000 and self.is_scan_bed:
+            self.is_scan_bed = False
+            self.was_scan_bed = True
+
+        # TODO on debug (here) show left/right depth measure contours
         z = self.get_depth_value(base)
 
         self.write_text(masked, "scanning...", (20, 40))
