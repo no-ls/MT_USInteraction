@@ -33,6 +33,7 @@ class US_Area():
         eroded = cv2.erode(thresh, None, iterations=1) # get rid of text/lines
         contours, _ = cv2.findContours(eroded, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
+        if len(contours) == 0: return False
         x, y, w, h = cv2.boundingRect(max(contours, key=cv2.contourArea))
         
         # only change if the x/y coordinates change

@@ -20,7 +20,8 @@ MAX_COLOR_VALUE = 1.0
 MAX_DEPTH_VALUE = 200
 
 SIZE_SCAN_BED = 40000
-BED_DURATION = 100 # how long the scan bed need to be visible for
+MIN_SIZE_POST_BED = 20000
+BED_DURATION = 50 # how long the scan bed need to be visible for
 # Angle at of the diagonal measuring stick /_ 
 DIAGONAL_ANGLE = 28.6 # in degrees
 
@@ -54,6 +55,7 @@ class Scanner(Demo):
 
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         super().do(frame, masked)
+        # masked = cv2.pyrDown(masked)
 
         base = masked.copy() # basic, unaltered masked frame
 
@@ -79,6 +81,7 @@ class Scanner(Demo):
 
         # ----- PRE - SCAN ----- # 
 
+        if len(contours) == 0: return masked
         max_c = max(contours, key=cv2.contourArea) 
         area = cv2.contourArea(max_c)
 
@@ -92,7 +95,7 @@ class Scanner(Demo):
                 self.write_text(masked, "Done!", (20, 60))
                 self.is_scan_bed = True
             return masked
-        elif area < SIZE_SCAN_BED and self.is_scan_bed:
+        elif area < MIN_SIZE_POST_BED and self.is_scan_bed:
             self.is_scan_bed = False
             self.was_scan_bed = True
             self.bed_duration = 0
@@ -108,14 +111,13 @@ class Scanner(Demo):
             self.prev_z = z
             self.parse_contours(base, contours, z) # use unaltered frame
             self.init_viz()
-            # if not self.has_init_viz:
-            #     self.vis.create_window()
-            #     self.vis.add_geometry(self.pcd)
-            #     self.has_init_viz = True
 
         # ----- (DEBUG) INFO ----- #
         if self.is_debug:
-            cv2.drawContours(masked, [self.left_contour, self.right_contour], -1, COLORS.GREEN, 1)
+            if self.left_contour != None or self.right_contour != None:
+                cv2.drawContours(masked, [self.left_contour, self.right_contour], -1, COLORS.GREEN, 1)
+            if len(max_c) > 0:
+                cv2.drawContours(masked, contours, -1, COLORS.RED, 1)
         self.write_text(masked, "scanning...", (20, 40))
         self.write_text(masked, f"z = {z}", (20, 60))
 
@@ -153,6 +155,9 @@ class Scanner(Demo):
 
         _, right = cv2.threshold(right, 70, 255, cv2.THRESH_BINARY)
         right_contours, _ = cv2.findContours(right, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        if len(left_contours) == 0 or len(right_contours) == 0:
+            return self.prev_z + DEFAULT_Z_DISTANCE
 
         # get the biggest contours
         left_max = max(left_contours,   key=cv2.contourArea)
@@ -257,11 +262,9 @@ class Scanner(Demo):
         self.vis.update_renderer()
 
     def on_finished(self, frame):
-        if not self.started:
-            print("No scan :(")
-            return
         print("[INFO] - Showing stacked point cloud")
         o3d.visualization.draw_geometries([self.pcd])
+        self.save(frame)
 
     def save(self, frame):  
         print("saving to: ../Data/Models/cloud-{time.time()}.pcd")   
@@ -269,6 +272,7 @@ class Scanner(Demo):
 
 # ----- MAIN ----- #
 # video = "../Data/scan-test-diagonal1.mp4"
-video = "../Data/scan4.mp4"
+# video = "../Data/scan4.mp4"
+video = "../Data/scan3-cut.mp4"
 player = Player(Scanner(), video)
 player.start_player()
