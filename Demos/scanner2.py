@@ -20,8 +20,8 @@ MAX_COLOR_VALUE = 1.0
 MAX_DEPTH_VALUE = 200
 
 SIZE_SCAN_BED = 40000
-MIN_SIZE_POST_BED = 20000
-BED_DURATION = 50 # how long the scan bed need to be visible for
+MIN_SIZE_POST_BED = 30000
+BED_DURATION = 20 # how long the scan bed need to be visible for
 # Angle at of the diagonal measuring stick /_ 
 DIAGONAL_ANGLE = 28.6 # in degrees
 
@@ -48,8 +48,8 @@ class Scanner(Demo):
         self.do_freehand_scan = False
 
     def start(self):
-        self.start_scan = True
-    
+        self.start_scan = not self.start_scan
+
     def free_key_interaction(self):
         self.do_freehand_scan = True
 
@@ -264,7 +264,7 @@ class Scanner(Demo):
     def on_finished(self, frame):
         print("[INFO] - Showing stacked point cloud")
         o3d.visualization.draw_geometries([self.pcd])
-        self.save(frame)
+        # self.save(frame)
 
     def save(self, frame):  
         print("saving to: ../Data/Models/cloud-{time.time()}.pcd")   
@@ -274,5 +274,7 @@ class Scanner(Demo):
 # video = "../Data/scan-test-diagonal1.mp4"
 # video = "../Data/scan4.mp4"
 video = "../Data/scan3-cut.mp4"
+# video = "../Data/scan-agar2.mp4"
+# video = "../Data/scan-boat3.mp4"
 player = Player(Scanner(), video)
 player.start_player()
