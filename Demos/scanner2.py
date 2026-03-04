@@ -264,17 +264,18 @@ class Scanner(Demo):
     def on_finished(self, frame):
         print("[INFO] - Showing stacked point cloud")
         o3d.visualization.draw_geometries([self.pcd])
-        # self.save(frame)
+        self.save_point_cloud(frame)
 
-    def save(self, frame):  
+    def save_point_cloud(self, frame):  
         print("saving to: ../Data/Models/cloud-{time.time()}.pcd")   
         o3d.io.write_point_cloud(f"../Data/Models/cloud-{time.time()}.pcd", self.pcd)
 
 # ----- MAIN ----- #
 # video = "../Data/scan-test-diagonal1.mp4"
 # video = "../Data/scan4.mp4"
-video = "../Data/scan3-cut.mp4"
+# video = "../Data/scan3-cut.mp4"
 # video = "../Data/scan-agar2.mp4"
-# video = "../Data/scan-boat3.mp4"
+video = "../Data/scan-boat.mp4"
+# video = "../Data/agar-cat.png"
 player = Player(Scanner(), video)
 player.start_player()
