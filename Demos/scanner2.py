@@ -37,13 +37,15 @@ class Scanner(Demo):
         self.was_scan_bed = False
         self.bed_duration = 0
 
+        self.us_area_threshold = 37
+
         self.has_init_viz = False
         self.vis = o3d.visualization.Visualizer()
         self.pcd = o3d.geometry.PointCloud()
 
         self.prev_z = 0
-        self.left_contour = None
-        self.right_contour = None
+        self.stick_contour = []
+        self.prev_contour = []
 
         self.do_freehand_scan = False
 
@@ -52,6 +54,8 @@ class Scanner(Demo):
 
     def free_key_interaction(self):
         self.do_freehand_scan = True
+
+    # ---
 
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         super().do(frame, masked)
@@ -71,7 +75,7 @@ class Scanner(Demo):
                 self.write_text(frame, "Press 'f' for freehand scan", (20, 60))
             return frame
         
-        # Option to du freehand scan (i.e. without scan diagonals)
+        # Option to do freehand scan (i.e. without scan diagonals)
         if self.do_freehand_scan:
             self.write_text(masked, "scanning (freehand)...", (20, 40))
             self.parse_contours(base, contours, self.prev_z) # use unaltered frame
@@ -82,45 +86,35 @@ class Scanner(Demo):
         # ----- PRE - SCAN ----- # 
 
         if len(contours) == 0: return masked
-        max_c = max(contours, key=cv2.contourArea) 
-        area = cv2.contourArea(max_c)
+        max_c = max(contours, key=cv2.contourArea)
+        cv2.drawContours(masked, [max_c], -1, COLORS.BLUE, 1)
 
-        # check for the scan bed: 
-            # if it hasn't been detected yet, the scan does not start
-            # if its been detected and disappeared again, then start the scan
-        if area >= SIZE_SCAN_BED and not self.was_scan_bed: 
-            self.write_text(masked, "Detecting scan bed", (20, 40))
-            self.bed_duration += 1
-            if self.bed_duration > BED_DURATION:
-                self.write_text(masked, "Done!", (20, 60))
-                self.is_scan_bed = True
+        # ignore the scan bed (should fill out area), if it gets (reliably) detected
+        x,y,w,h = cv2.boundingRect(max_c)
+        if w > self.us_area.w - 50 and self.is_debug:
+            cv2.rectangle(masked,(x,y),(x+w,y+h),COLORS.GREEN,1)
+            self.write_text(masked, "ignoring scan bed", (20, 80))
             return masked
-        elif area < MIN_SIZE_POST_BED and self.is_scan_bed:
-            self.is_scan_bed = False
-            self.was_scan_bed = True
-            self.bed_duration = 0
-        elif not self.was_scan_bed:
-            self.write_text(masked, "Waiting for scan bed", (20, 40))
-            return masked
-
+        
         # ----- SCAN - PROCESS ----- # 
 
         z = self.get_depth_value(base)
 
         if z != None:
-            self.prev_z = z
             self.parse_contours(base, contours, z) # use unaltered frame
             self.init_viz()
+            self.prev_z = z
 
         # ----- (DEBUG) INFO ----- #
         if self.is_debug:
-            if self.left_contour != None or self.right_contour != None:
-                cv2.drawContours(masked, [self.left_contour, self.right_contour], -1, COLORS.GREEN, 1)
             if len(max_c) > 0:
                 cv2.drawContours(masked, contours, -1, COLORS.RED, 1)
+            if len(self.stick_contour) > 0:
+                cv2.drawContours(masked, [self.stick_contour], -1, COLORS.GREEN, 1)
         self.write_text(masked, "scanning...", (20, 40))
         self.write_text(masked, f"z = {z}", (20, 60))
 
+        self.prev_contour = max_c
         return masked
     
     def init_viz(self):
@@ -130,70 +124,65 @@ class Scanner(Demo):
             self.vis.add_geometry(self.pcd)
             self.has_init_viz = True
 
-    
-    def get_depth_value(self, masked:MatLike):
+    def get_depth_value(self, masked:MatLike, is_left=True):
         """Map y-coordinates on the left/right side of the image to a depth value"""
         # NOTE: The scan bed has a diagonal measuring stick on the left and right side (going up/down)
                 # As the bed is lowered the stick will show up at a different y-value in the US image 
 
         masked = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
 
-        # black out the right side
-        left = masked.copy()
-        left = cv2.rectangle(left, (SCAN_STRIP_WIDTH, 0), (self.image_w, self.image_h), COLORS.BLACK, -1) # right side
-        # left = cv2.rectangle(left, (0, 0), (self.image_w,200), COLORS.BLACK, -1) # top 
-        left = cv2.rectangle(left, (0, self.image_h-150), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
-
-        # black out the left side
-        right = masked.copy()
-        right = cv2.rectangle(right, (0, 0), (self.image_w-SCAN_STRIP_WIDTH, self.image_h), COLORS.BLACK, -1) # left side
-        right = cv2.rectangle(right, (0, self.image_h-150), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
+        # HACK: MAGIC NUMBER ↓
+        side = None
+        if is_left:
+            # black out the right side, so only the left side is left
+            left = masked.copy()
+            left = cv2.rectangle(left, (SCAN_STRIP_WIDTH, 0), (self.image_w, self.image_h), COLORS.BLACK, -1) # right side
+            left = cv2.rectangle(left, (0, 0), (self.image_w,200), COLORS.BLACK, -1) # top 
+            left = cv2.rectangle(left, (0, self.image_h-250), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
+            side = left
+        else: # right + reverse
+            right = masked.copy()
+            right = cv2.rectangle(right, (0, 0), (self.image_w-SCAN_STRIP_WIDTH, self.image_h), COLORS.BLACK, -1) # left side
+            right = cv2.rectangle(right, (self.image_w-200, 0), (self.image_w, 200), COLORS.BLACK, -1) # top 
+            right = cv2.rectangle(right, (0, self.image_h-250), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
+            side = right
+    
 
         # get the contours of the scan sticks
-        _, left = cv2.threshold(left, 70, 255, cv2.THRESH_BINARY)
-        left_contours, _ = cv2.findContours(left, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        _, side = cv2.threshold(side, 70, 255, cv2.THRESH_BINARY) # HACK: MAGIC NUMBER
+        stick_contours, _ = cv2.findContours(side, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        _, right = cv2.threshold(right, 70, 255, cv2.THRESH_BINARY)
-        right_contours, _ = cv2.findContours(right, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-        if len(left_contours) == 0 or len(right_contours) == 0:
+        if len(stick_contours) == 0:
             return self.prev_z + DEFAULT_Z_DISTANCE
 
         # get the biggest contours
-        left_max = max(left_contours,   key=cv2.contourArea)
-        right_max = max(right_contours, key=cv2.contourArea) 
-        self.left_contour = left_max # for showing debug
-        self.right_contour = right_max 
+        stick_max = max(stick_contours,   key=cv2.contourArea)
+        self.stick_contour = stick_max # for showing debug
+        stick_area = cv2.contourArea(stick_max)
 
-        left_area = cv2.contourArea(left_max)
-        right_area = cv2.contourArea(right_max)
+        cv2.drawContours(masked, [stick_max],-1, COLORS.PURPLE, 1)
 
-        cv2.drawContours(masked, [left_max],-1, COLORS.PURPLE, 1)
-        cv2.drawContours(masked, [right_max],-1, COLORS.GREEN, 1)
-
-        # if contours are big enough (ignore noise) calculate z-value
-        left_z = 0
-        right_z = 0
-        if left_area > 700 :
-            left_y = self.get_center_Y(left_max)
-            left_y = self.find_US_y(left_y)
-            left_z = self.calculate_depth(left_y)
-        if right_area > 700 :
-            right_y = self.get_center_Y(right_max)
-            right_y = self.find_US_y(right_y, inverse=True)
-            right_z = self.calculate_depth(right_y)
-        if left_area < 700 and right_area < 700: # update a previous value or drop
-            if self.prev_z > 0: 
+        # filter out contours that are too wide, and very small (h) (prop. scan bed)
+        sx,sy,sw,sh = cv2.boundingRect(stick_max)
+        if sw > sh:
+            s_diff = sw - sh
+            if s_diff > 30: # HACK: MAGIC NUMBER!
+                print("z: got grid")
+                return # drop
+            
+        # if contours are big enough (to ignore noise) calculate z-value
+        z = 0
+        if stick_area > 200:  # HACK: MAGIC NUMBER
+            y = self.get_center_Y(stick_max)
+            y = self.find_US_y(y, going_down=is_left)
+            z = self.calculate_depth(y)
+            print("++ ", z)
+            return round(z, 2)
+        elif stick_area < 200:
+            if self.prev_z > 0:
+                print("++ default z-value")
                 return self.prev_z + DEFAULT_Z_DISTANCE
             else: return # drop
-
-        # return the new depth value            
-        if left_z != 0 and right_z != 0:
-            return round(np.average([left_z, right_z]),2)
-        elif left_z != 0 and right_z == 0: 
-            return left_z
-        else:
-            return right_z
 
     def get_center_Y(self, contour):
         M = cv2.moments(contour)
@@ -202,12 +191,12 @@ class Scanner(Demo):
             return cy
         return 0
     
-    def find_US_y(self, y, inverse=False):
+    def find_US_y(self, y, going_down=True):
         """Subtract the offset of the actual US scan area from the y coordinate"""
-        if inverse: # diagonal coming from back/bottom
+        if not going_down: # diagonal coming from back/bottom
             return self.us_area.h - y
-        # diagonal coming from front/top
-        return y - self.us_area.y
+        
+        return y - self.us_area.y # diagonal coming from front/top
 
     def calculate_depth(self, y):
         """Use a (irl) y value to calculate the depth is represents (using triangulation)"""
@@ -224,6 +213,14 @@ class Scanner(Demo):
     
     def parse_contours(self, masked:MatLike, contours, z):
         """Convert the contours to 3d point clouds and stack them at different heights"""
+
+        # skip if the z-value hasn't changed
+        if self.prev_z == z:
+            return
+
+        # TODO skip scanning once max contour stays the same for a while
+
+
         # colors for better viewing
         c = np.interp(z, [0, MAX_DEPTH_VALUE], [0, MAX_COLOR_VALUE])
         blue = (0.3, 0.0, c)
@@ -264,7 +261,7 @@ class Scanner(Demo):
     def on_finished(self, frame):
         print("[INFO] - Showing stacked point cloud")
         o3d.visualization.draw_geometries([self.pcd])
-        self.save_point_cloud(frame)
+        # self.save_point_cloud(frame)
 
     def save_point_cloud(self, frame):  
         print("saving to: ../Data/Models/cloud-{time.time()}.pcd")   
@@ -274,8 +271,8 @@ class Scanner(Demo):
 # video = "../Data/scan-test-diagonal1.mp4"
 # video = "../Data/scan4.mp4"
 # video = "../Data/scan3-cut.mp4"
-# video = "../Data/scan-agar2.mp4"
-video = "../Data/scan-boat.mp4"
-# video = "../Data/agar-cat.png"
+video = "../Data/scan-agar2.mp4"
+video = "../Data/nscan-3dball3.mp4"
+# video = "../Data/scan-boat.mp4"
 player = Player(Scanner(), video)
 player.start_player()
