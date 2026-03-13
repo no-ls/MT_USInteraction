@@ -25,6 +25,10 @@ BED_DURATION = 20 # how long the scan bed need to be visible for
 # Angle at of the diagonal measuring stick /_ 
 DIAGONAL_ANGLE = 28.6 # in degrees
 
+SCAN_STICK_THRESHOLD = 70
+MIN_GRID_WIDTH = 30
+MIN_STICK_CONTOUR_AREA = 200
+
 class Scanner(Demo):
     def __init__(self) -> None:
         super().__init__()
@@ -131,7 +135,7 @@ class Scanner(Demo):
 
         masked = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
 
-        # HACK: MAGIC NUMBER ↓
+        # HACK-y (adjust if needed) ↓
         side = None
         if is_left:
             # black out the right side, so only the left side is left
@@ -149,7 +153,7 @@ class Scanner(Demo):
     
 
         # get the contours of the scan sticks
-        _, side = cv2.threshold(side, 70, 255, cv2.THRESH_BINARY) # HACK: MAGIC NUMBER
+        _, side = cv2.threshold(side, SCAN_STICK_THRESHOLD, 255, cv2.THRESH_BINARY)
         stick_contours, _ = cv2.findContours(side, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         if len(stick_contours) == 0:
@@ -166,19 +170,19 @@ class Scanner(Demo):
         sx,sy,sw,sh = cv2.boundingRect(stick_max)
         if sw > sh:
             s_diff = sw - sh
-            if s_diff > 30: # HACK: MAGIC NUMBER!
+            if s_diff > MIN_GRID_WIDTH:
                 print("z: got grid")
                 return # drop
             
         # if contours are big enough (to ignore noise) calculate z-value
         z = 0
-        if stick_area > 200:  # HACK: MAGIC NUMBER
+        if stick_area > MIN_STICK_CONTOUR_AREA:  
             y = self.get_center_Y(stick_max)
             y = self.find_US_y(y, going_down=is_left)
             z = self.calculate_depth(y)
             print("++ ", z)
             return round(z, 2)
-        elif stick_area < 200:
+        elif stick_area < MIN_STICK_CONTOUR_AREA:
             if self.prev_z > 0:
                 print("++ default z-value")
                 return self.prev_z + DEFAULT_Z_DISTANCE
@@ -219,7 +223,6 @@ class Scanner(Demo):
             return
 
         # TODO skip scanning once max contour stays the same for a while
-
 
         # colors for better viewing
         c = np.interp(z, [0, MAX_DEPTH_VALUE], [0, MAX_COLOR_VALUE])
