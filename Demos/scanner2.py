@@ -29,6 +29,8 @@ SCAN_STICK_THRESHOLD = 70
 MIN_GRID_WIDTH = 30
 MIN_STICK_CONTOUR_AREA = 200
 
+MIN_SIMILAR_SCORE = 20
+
 class Scanner(Demo):
     def __init__(self) -> None:
         super().__init__()
@@ -49,7 +51,9 @@ class Scanner(Demo):
 
         self.prev_z = 0
         self.stick_contour = []
-        self.prev_contour = []
+        self.prev_max_c = []
+
+        self.similar_score = 0
 
         self.do_freehand_scan = False
 
@@ -78,14 +82,6 @@ class Scanner(Demo):
             else:
                 self.write_text(frame, "Press 'f' for freehand scan", (20, 60))
             return frame
-        
-        # Option to do freehand scan (i.e. without scan diagonals)
-        if self.do_freehand_scan:
-            self.write_text(masked, "scanning (freehand)...", (20, 40))
-            self.parse_contours(base, contours, self.prev_z) # use unaltered frame
-            self.init_viz()
-            self.prev_z += 1
-            return frame
 
         # ----- PRE - SCAN ----- # 
 
@@ -102,10 +98,20 @@ class Scanner(Demo):
         
         # ----- SCAN - PROCESS ----- # 
 
+        # FREEHAND SCAN (i.e. !without! scan diagonals and calculated depth value)
+        if self.do_freehand_scan:
+            self.write_text(masked, "scanning (freehand)...", (20, 40))
+            self.parse_contours(base, contours, self.prev_z, max_c, True) # use unaltered frame
+            self.init_viz()
+            self.prev_z += 1
+            return frame
+
+        # REGULAR SCAN (i.e. using scan diagonal to calculated depth value)
+
         z = self.get_depth_value(base)
 
         if z != None:
-            self.parse_contours(base, contours, z) # use unaltered frame
+            self.parse_contours(base, contours, z, max_c) # use unaltered frame
             self.init_viz()
             self.prev_z = z
 
@@ -118,11 +124,14 @@ class Scanner(Demo):
         self.write_text(masked, "scanning...", (20, 40))
         self.write_text(masked, f"z = {z}", (20, 60))
 
-        self.prev_contour = max_c
+        # self.check_contour_similarity(max_c)
+
+        if len(self.prev_max_c) == 0:
+            self.prev_max_c = max_c
         return masked
     
     def init_viz(self):
-        """init the real time view of the visualization window (requires initial points), if not yet done"""
+        """Init the real time view of the visualization window (requires initial points), if not yet done"""
         if not self.has_init_viz:
             self.vis.create_window()
             self.vis.add_geometry(self.pcd)
@@ -180,11 +189,11 @@ class Scanner(Demo):
             y = self.get_center_Y(stick_max)
             y = self.find_US_y(y, going_down=is_left)
             z = self.calculate_depth(y)
-            print("++ ", z)
+            # print("++ ", z)
             return round(z, 2)
         elif stick_area < MIN_STICK_CONTOUR_AREA:
             if self.prev_z > 0:
-                print("++ default z-value")
+                # print("++ default z-value")
                 return self.prev_z + DEFAULT_Z_DISTANCE
             else: return # drop
 
@@ -215,14 +224,30 @@ class Scanner(Demo):
         a = round( ( c / np.sin(np.deg2rad(gamma)) ) * np.sin(np.deg2rad(alpha)), 2 )
         return a 
     
-    def parse_contours(self, masked:MatLike, contours, z):
+    def contour_is_unchanged(self, max_c:list)->bool:
+        """Check if the contour has significantly changed for a while"""
+        if len(self.prev_max_c) != 0:
+            ret = cv2.matchShapes(self.prev_max_c,max_c,1,0.0) # compare contours
+            if ret < 0.1:
+                self.similar_score += 1
+            else: 
+                self.prev_max_c = max_c # update
+                self.similar_score = 0
+            
+            if self.similar_score >= MIN_SIMILAR_SCORE:
+                print("contours too similar for too long -> skipping")
+                return True
+            else: False
+    
+    def parse_contours(self, masked:MatLike, contours, z, max_c, is_freehand=False):
         """Convert the contours to 3d point clouds and stack them at different heights"""
 
-        # skip if the z-value hasn't changed
-        if self.prev_z == z:
-            return
+        # skip if the z-value hasn't changed 
+        if self.prev_z == z and not is_freehand:
+            return # NOTE: freehand scan uses prev_z here before updating it later on
 
-        # TODO skip scanning once max contour stays the same for a while
+        # skip scanning once max contour stays the same for a while
+        if self.contour_is_unchanged(max_c): return
 
         # colors for better viewing
         c = np.interp(z, [0, MAX_DEPTH_VALUE], [0, MAX_COLOR_VALUE])
@@ -236,6 +261,7 @@ class Scanner(Demo):
         self.i += 1
 
     def contours_to_3d(self, contours, z_value, color:np.array):
+        """Turn the OpenCV-contours into a usable format and add them to the Open3D point cloud"""
         if len(contours) == 0: return
         # parse the contours into the right format
         cnts = np.vstack(contours).squeeze(1) 
@@ -255,7 +281,7 @@ class Scanner(Demo):
     def update_visualization(self):
         """using non-blocking visualization: https://www.open3d.org/docs/latest/tutorial/visualization/non_blocking_visualization.html"""
         # see for example: https://stackoverflow.com/a/74669788, https://stackoverflow.com/a/78009748
-        # NOTE: requires initialization with existing points
+        # NOTE: requires initialization with existing points (see: init_viz())
 
         self.vis.update_geometry(self.pcd)
         self.vis.poll_events()
