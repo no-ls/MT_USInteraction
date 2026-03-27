@@ -21,6 +21,9 @@ Ultrasound settings:
         - Amplification of the far field: 0.0
         - Focus: Middle, Far (F1)
 
+CONTROLS:
+    - r = reset the default ellipsis (used for size comparison for the squash check)
+
 NOTE:
     - might require some fiddling with the values
     - is not the most robust, especially if the sizing, and ultrasound machine settings are different
