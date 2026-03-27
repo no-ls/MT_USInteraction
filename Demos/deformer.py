@@ -8,26 +8,33 @@ import pyautogui
 import mouse
 
 """
-NOTEs
-- detect ball outline with contours
-    - Problem: sometimes the contours are very broken up
-    - increasing the contrast with the US machine + using color-quant 1 helps
-- fit an ellipse over the contours
-    - approximates the shape, but stays flexible
-        - other approximations (e.g. circle, square, simplified contour) don't change enough to differentiate
-    - SQUISH = compare the two axis of the ellipse, to check if one is sig. longer
-    - SQUASH = compare the length of the axis to a (currently) set value; check if its larger
-- ? use the center of the ellipse to mimic movement
-- find use case:
-    - A) as mouse / for mouse-like interaction
-    - B) assign controls (e.g. squish = pause) / create simple game
-    - C) just visualize the interaction -> e.g. squash increases amount, squish decreases
+Main implementation of the DEFORM-able Demo:
+    - use a deformable stress ball as an input device
+    - moving the ball simulates mouse movement
+    - squashing the ball causes a left click
+    - squishing the ball causes a right click
+
+Ultrasound settings:
+    - Example /w Philips SDR-1200:
+        - Amplification of entire field: 60 (out of 60)
+        - Amplification of near field: 10
+        - Amplification of the far field: 0.0
+        - Focus: Middle, Far (F1)
+
+NOTE:
+    - might require some fiddling with the values
+    - is not the most robust, especially if the sizing, and ultrasound machine settings are different
+
 """
 
 MIN_AREA_SIZE = 5000
 MIN_CLICK_REQUIREMENT = 20
 MIN_DEFAULT_ELLIPSE_REQUIREMENT = 20
 PROBE_ARTIFACT = 30
+
+SQUISH_DISTORTION_THRESHOLD = 0.3
+SQUASH_DISTORTION_THRESHOLD = 0.1
+SQUASH_SCALE_THRESHOLD = 0.15
 
 # TODO: ignore too small changes in the contour/ellipse
 
@@ -62,6 +69,8 @@ class Deformer(Demo):
         """Fit a ellipse over the contours to approximate the shape and compare axis"""
         super().do(frame, masked)
 
+        # masked = cv2.rotate(masked, cv2.ROTATE_90_CLOCKWISE) # TODO rotate image for sideways usage
+
         # mask top
         cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
 
@@ -74,6 +83,8 @@ class Deformer(Demo):
         # cv2.drawContours(frame, contours, -1, COLORS.PURPLE, 1)
         # return thresh
         
+        # -- SEGMENTATION -- #
+
         contours, frame = self.segment(masked)
         if len(contours) < 1: return frame
 
@@ -118,7 +129,7 @@ class Deformer(Demo):
 
         # draw default ellipse
         default_ellipse = (center_x, center_y), (self.default_major, self.default_minor), self.default_angle
-        # cv2.ellipse(frame, default_ellipse, COLORS.BLACK, 2)
+        cv2.ellipse(frame, default_ellipse, COLORS.BLACK, 2)
         default_text = f"set default ellipse (black) - reset with 'r'"
         self.write_text(frame, default_text, (10, 40))
     
@@ -126,16 +137,16 @@ class Deformer(Demo):
         scale_log = np.log((major + minor) / (self.default_major + self.default_minor))
         scale_log = np.abs(scale_log)
 
-        # if aspect_ratio > 1.2 and not self.has_squish_clicked:
         # NOTE: Values can be very situation -> might require adapting
-        if distortion > 0.3 and not self.has_squish_clicked: 
+        # if aspect_ratio > 1.2 and not self.has_squish_clicked:
+        if distortion > SQUISH_DISTORTION_THRESHOLD and not self.has_squish_clicked: 
             # SQUISH
             cv2.ellipse(frame, ellipse,COLORS.GREEN, 2) # feedback
-            if self.squish > MIN_CLICK_REQUIREMENT: # HACK: better make framerate dependent
+            if self.squish > MIN_CLICK_REQUIREMENT: # HACK: would be better to make framerate dependent
                 self.has_squish_clicked = True
             self.squish += 1
         # elif aspect_ratio < 1.1 and scale > 1.2 and not self.has_squash_clicked:
-        elif distortion < 0.1 and scale_log > 0.15 and not self.has_squash_clicked:
+        elif distortion < SQUASH_DISTORTION_THRESHOLD and scale_log > SQUASH_SCALE_THRESHOLD and not self.has_squash_clicked:
             # SQUASH
             cv2.ellipse(frame, ellipse,COLORS.PURPLE, 2) # feedback
             if self.squash > MIN_CLICK_REQUIREMENT:
@@ -144,12 +155,12 @@ class Deformer(Demo):
         else:
             if self.has_squish_clicked:
                 self.has_squish_clicked = False
-                print("RIGHT CLICK")
-                # mouse.right_click()
+                # print("RIGHT CLICK")
+                mouse.right_click()
             elif self.has_squash_clicked:
                 self.has_squash_clicked = False
-                print("LEFT CLICK")
-                # mouse.click()
+                # print("LEFT CLICK")
+                mouse.click()
                 
             # reset if back to "default" state
             self.squish = 0
@@ -193,35 +204,9 @@ class Deformer(Demo):
         print("resetting the default ellipse")
 
 # ----- MAIN ----- #
-# video = "../Data/stressball.mp4"
-# video = "../Data/stress_deform2.mp4"
-# video = "../Data/stress-new-g40.mp4"
 video = "../Data/stress_x1.mp4"
-# video = "../Data/stress_x15.mp4"
+# video = "../Data/stress_x15.mp4" # alt video
 player = Player(Deformer(), video)
 player.start_player()
 
 # ---------------------------------
-
-"""
-# SQUISH
-if axis_diff >= (self.default_axis / 2):
-    cv2.ellipse(frame, ellipse,COLORS.GREEN, 2)
-    self.write_text(frame, f"SQUISH: {axis_diff}", (int(center_x), int(center_y)))
-    self.has_squish_clicked = True 
-# SQUASH
-elif major_diff > (self.default_axis / 2) and minor_diff > (self.default_axis / 3):
-    cv2.ellipse(frame, ellipse,COLORS.PURPLE, 2)
-    self.write_text(frame, f"SQUASH: {major_diff}/{minor_diff}", (int(center_x), int(center_y)))
-    self.has_squash_clicked = True
-
-    def translate_mouse_coordinates_old(self, x:int, y:int)-> tuple[int]:
-        # Translate the coordinates to fit the current screen
-        if self.image_h == None or self.monitor_w == None:
-            self.set_monitor_dimensions()
-
-        # scale mouse positions to fit monitor
-        mouse_x = x * (self.monitor_w / self.image_w)
-        mouse_y = y * (self.monitor_h / self.image_h)
-        return mouse_x, mouse_y
-"""

@@ -23,19 +23,23 @@ Ultrasound settings:
         - Focus: Middle and Far (F1)
 """
 
+# Area at the top of the US_IMAGE that contains noise from the probe (adjust as needed)
 SENSOR_ARTIFACT_AREA = 100
-DOWN = 1
-UP = -1
+
+# How much to go to each side of the collision point on the contour
+OFFSET_COLLISION_END_POINTS = 10 
+
+# Pong Settings
+SPEED = 8
+CIRCLE_RADIUS = 10
 
 DEGREES_90 = 90
 DEGREES_180 = 180
 
-OFFSET_COLLISION_END_POINTS = 10 # How much to go to each side of the collision point on the contour
 
 class Game(Demo):
     def __init__(self) -> None:
         super().__init__()
-        self.us_area_threshold = 20
         self.pong = Pong()
 
     def do(self, frame: MatLike, masked: MatLike) -> MatLike:
@@ -54,13 +58,10 @@ class Game(Demo):
 
 # ----- PONG ----- #
 
-UP = -1
-DOWN = 1
-
 class Pong():
     def __init__(self) -> None:
-        self.speed = 8
-        self.radius = 10
+        self.speed = SPEED
+        self.radius = CIRCLE_RADIUS
         self.color = COLORS.GREEN
         self.score = 0
 
@@ -104,7 +105,6 @@ class Pong():
                 self.score += 1
                 end[:] = [area_width, 0]
                 self.reset(soft_reset=False)
-                # self.reset(soft_reset=True)
             # NOTE: does not always work -> but usually gets out of bounds anyway
             elif self.x > area_width: # right side
                 start[:] = [area_width, 0]
@@ -147,46 +147,6 @@ class Pong():
             elif result == -1 and self.has_reflected:
                 self.has_reflected = False
                 print("reset reflection")
-
-    # TODO: rm
-    def calculate_reflection_1(self, start:list[int], end:list[int], direction=-1):
-        """TEST
-        via: ChatGPT (I have the start and endpoints for two lines, the incidence line and the mirror line. 
-        How do I calculate the angle of reflection, so that it works from any direction. I'm using python)"""
-        # incidence = self.incidence_start[0], self.incidence_start[1], self.x, self.y
-        # collision start[0], start[1], end[0], end[1]
-        P1 = np.array([self.incidence_start[0], self.incidence_start[1]])
-        P2 = np.array([self.x, self.y])
-        M1 = np.array([start[0], start[1]])
-        M2 = np.array([end[0], end[1]])
-
-        incident = P2 - P1
-        mirror = M2 - M1
-
-        # normalize vectors
-        incident = incident / np.linalg.norm(incident)
-        mirror = mirror / np.linalg.norm(incident)
-
-        # compute normal of mirror
-        normal = np.array([-mirror[1], mirror[0]])
-        normal = normal / np.linalg.norm(normal)
-
-        print("normal", normal)
-        self.speed = - 8
-
-        # reflect
-        dot = np.dot(incident, normal)
-        reflected = incident - 2 * dot * normal
-
-        # angles 
-        angle_incidence = np.arccos(np.clip(dot, -1, 1))
-        angle_reflection = angle_incidence 
-
-        theta_ref = np.arctan2(reflected[1], reflected[0])
-        # set
-        self.reflection_angle = np.deg2rad(theta_ref)
-
-        self.collision_line[:] = [start, end]
 
     def calculate_reflection(self, start:list[int], end:list[int], direction=-1):
         """Calculate the reflection off of a line, based on the incident angle and collision line"""
@@ -249,7 +209,7 @@ class Pong():
             self.x = self.x0
             self.y = self.y0
         self.reflection_angle = math.radians(DEGREES_90)
-        self.speed = 8 # randomize ?
+        self.speed = SPEED
         self.incidence_start = [self.x0, self.y0]
         self.update_spawn_point()
         # self.radius = random.randint(5, 20)
@@ -262,7 +222,7 @@ class Pong():
         cv2.circle(frame, (self.x, self.y), self.radius, self.color, -1)        
         self.write_score(frame)
 
-        # DEBUG
+        # DEBUG info
         if debug:
             self.draw_debug_lines(frame)
                 
@@ -291,6 +251,6 @@ class Pong():
 
 # ----- MAIN ----- #
 
-video = "../Data/stressball.mp4"
+video = "../Data/pong_match.mp4"
 player = Player(Game(), video)
 player.start_player()

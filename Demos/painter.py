@@ -16,6 +16,7 @@ Main implementation of PAINTER DEMO:
 CONTROLS:
     - r = reset
     - s = save (autosaves after a video ends)
+    - arrow up/down = adjust threshold settings
 
 Ultrasound settings:
     - basically, dimm the image
@@ -56,12 +57,12 @@ class Painter(Demo):
         super().do(frame, masked)
         frame = masked
 
+        # segmentation
         gray = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, self.slider_value, THRESH_MAX, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # contours, frame = self.segment(masked)
 
+        # line drawing
         if len(contours) == 0: # doesn't always work for new_lines
             self.is_newline = True
         else:
@@ -87,10 +88,10 @@ class Painter(Demo):
                 self.current_line.add_point(center, line_strength)
             else:
                 self.line_color = self.get_random_color()
-                # NOTE: immediate new_lining causes small breaks in line
                 self.is_newline = True
         
         self.draw_lines(frame)
+        
         return frame
     
     def map_line_strength(self, contour):
@@ -145,8 +146,6 @@ class Line():
 
 
 # ----- MAIN ----- #
-# video = "../Data/heart.mp4"
-# video = "../Data/zigzag.mp4"
 video = "../Data/draw_new.mp4"
 player = Player(Painter(), video)
 player.start_player()
