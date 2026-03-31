@@ -85,12 +85,30 @@ I used the *Philips Sono Diagnost R-1200* (SDR-1200) with the *LA 3510* probe (3
 <!-- Explain choices of detection method(s): why, how, expansion options, ... -->
 
 ### 1. 3D Scanner
+demo for: 3D reconstruction
 - `scanner.py`
-demo for: acoustic properties of different materials
-- detect an object and recreate its cross section in 3D
-- move the object to gather and append the cross sections
-- use a reference point to estimate the position
-- TODO
+
+The application can be used freehand or by utilizing a scan-bed-construction, that calculates the current depth or height of the object with the help of a diagonal stick (pointing backwards) and triangulation.
+
+![Example of the painter demo - scan-bed](../Data/Images/scanbed.jpg)
+
+Contours are extracted by using color quantization and then parsed and stacked into a point cloud.
+Due to the nature of ultrasound images, noise and artifacts can be difficult to fully avoid.
+For good results (see images below) a ultrasound agar phantom can be used. 
+
+Measurements I typically used: 
+- 125g water + 6.3g agar agar 
+- stir powder into cold water
+- boil and pour into a mold
+
+For further information and the original recipe see this [paper](https://doi.org/10.1016/j.afjem.2015.09.003) by Earle et al.
+
+The images below show the segmentation and resulting point cloud of a 3D scan with this demo.
+
+![Example of the scanner demo - segmentation](../Data/Images/repo-scanner.png)
+![Example of the painter demo - point cloud](../Data/Images/repo-scanner2.png)
+
+
 
 ### 2. Painter
 demo for: depth values
