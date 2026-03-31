@@ -5,3 +5,5 @@ OpenCV-examples
 Tests
 gesturer-old.py
 visualizer-old.py
+Data/Out/*.png
+Demos/*png

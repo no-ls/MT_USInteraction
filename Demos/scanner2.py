@@ -23,9 +23,9 @@ SIZE_SCAN_BED = 40000
 MIN_SIZE_POST_BED = 30000
 BED_DURATION = 20 # how long the scan bed need to be visible for
 # Angle at of the diagonal measuring stick /_ 
-DIAGONAL_ANGLE = 28.6 # in degrees
+DIAGONAL_ANGLE = 30 # 45 # 28.6 # in degrees
 
-SCAN_STICK_THRESHOLD = 70
+SCAN_STICK_THRESHOLD = 90
 MIN_GRID_WIDTH = 30
 MIN_STICK_CONTOUR_AREA = 200
 
@@ -39,6 +39,7 @@ class Scanner(Demo):
         self.pcds = []
         self.i = 1
         self.start_scan = False
+        self.end_scan = False
         self.is_scan_bed = False
         self.was_scan_bed = False
         self.bed_duration = 0
@@ -48,6 +49,7 @@ class Scanner(Demo):
         self.has_init_viz = False
         self.vis = o3d.visualization.Visualizer()
         self.pcd = o3d.geometry.PointCloud()
+        self.cam = self.vis.get_view_control()
 
         self.prev_z = 0
         self.stick_contour = []
@@ -58,7 +60,11 @@ class Scanner(Demo):
         self.do_freehand_scan = False
 
     def start(self):
-        self.start_scan = not self.start_scan
+        if not self.start_scan:
+            self.start_scan = True
+        elif self.start_scan:
+            self.start_scan = False
+            self.on_finished(None)
 
     def free_key_interaction(self):
         self.do_freehand_scan = True
@@ -90,11 +96,11 @@ class Scanner(Demo):
         cv2.drawContours(masked, [max_c], -1, COLORS.BLUE, 1)
 
         # ignore the scan bed (should fill out area), if it gets (reliably) detected
-        x,y,w,h = cv2.boundingRect(max_c)
-        if w > self.us_area.w - 50 and self.is_debug:
-            cv2.rectangle(masked,(x,y),(x+w,y+h),COLORS.GREEN,1)
-            self.write_text(masked, "ignoring scan bed", (20, 80))
-            return masked
+        # x,y,w,h = cv2.boundingRect(max_c)
+        # if w > self.us_area.w - 50 and self.is_debug:
+            # cv2.rectangle(masked,(x,y),(x+w,y+h),COLORS.GREEN,1)
+            # self.write_text(masked, "ignoring scan bed", (20, 80))
+            # return masked
         
         # ----- SCAN - PROCESS ----- # 
 
@@ -104,7 +110,11 @@ class Scanner(Demo):
             self.parse_contours(base, contours, self.prev_z, max_c, True) # use unaltered frame
             self.init_viz()
             self.prev_z += 1
-            return frame
+
+            if len(max_c) > 0:
+                cv2.drawContours(masked, contours, -1, COLORS.RED, 1)   
+
+            return masked
 
         # REGULAR SCAN (i.e. using scan diagonal to calculated depth value)
 
@@ -116,42 +126,47 @@ class Scanner(Demo):
             self.prev_z = z
 
         # ----- (DEBUG) INFO ----- #
+        # always show contours it will be converting to point cloud
+        if len(max_c) > 0:
+            cv2.drawContours(masked, contours, -1, COLORS.RED, 1)
+
+        # always show contour of measuring stick
+        if len(self.stick_contour) > 0:
+                cv2.drawContours(masked, [self.stick_contour], -1, COLORS.GREEN, 1)
+
         if self.is_debug:
-            if len(max_c) > 0:
-                cv2.drawContours(masked, contours, -1, COLORS.RED, 1)
             if len(self.stick_contour) > 0:
                 cv2.drawContours(masked, [self.stick_contour], -1, COLORS.GREEN, 1)
         self.write_text(masked, "scanning...", (20, 40))
         self.write_text(masked, f"z = {z}", (20, 60))
 
-        # self.check_contour_similarity(max_c)
-
         if len(self.prev_max_c) == 0:
             self.prev_max_c = max_c
+
         return masked
     
     def init_viz(self):
         """Init the real time view of the visualization window (requires initial points), if not yet done"""
         if not self.has_init_viz:
-            self.vis.create_window()
+            self.vis.create_window(height=740, width=1160)
             self.vis.add_geometry(self.pcd)
             self.has_init_viz = True
 
     def get_depth_value(self, masked:MatLike, is_left=True):
         """Map y-coordinates on the left/right side of the image to a depth value"""
-        # NOTE: The scan bed has a diagonal measuring stick on the left and right side (going up/down)
+        # NOTE: The scan bed has a diagonal measuring stick on the left and/or right side (going up/down)
                 # As the bed is lowered the stick will show up at a different y-value in the US image 
 
         masked = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
 
-        # HACK-y (adjust if needed) ↓
+        # HACK-y: blacks out any area where the stick isn't (adjust if needed) ↓
         side = None
         if is_left:
             # black out the right side, so only the left side is left
             left = masked.copy()
             left = cv2.rectangle(left, (SCAN_STRIP_WIDTH, 0), (self.image_w, self.image_h), COLORS.BLACK, -1) # right side
-            left = cv2.rectangle(left, (0, 0), (self.image_w,200), COLORS.BLACK, -1) # top 
-            left = cv2.rectangle(left, (0, self.image_h-250), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
+            left = cv2.rectangle(left, (0, 0), (self.image_w, 100), COLORS.BLACK, -1) # top 
+            # left = cv2.rectangle(left, (0, self.image_h-250), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
             side = left
         else: # right + reverse
             right = masked.copy()
@@ -214,15 +229,18 @@ class Scanner(Demo):
     def calculate_depth(self, y):
         """Use a (irl) y value to calculate the depth is represents (using triangulation)"""
         alpha = DIAGONAL_ANGLE # degrees -> angle of between ground and irl diagonal |↗_|
-        beta = 90 # degrees (right angle)
-        c = y
-        a = 0
+        c = y # hypotenuse
+        height = round( c * np.sin(np.deg2rad(alpha)), 2 )
+        return height
+        # beta = 90 # degrees (right angle)
+        # a = 0
 
         # get remaining angle
-        gamma = 180 - alpha - beta
-        # use law of sines (sinussatz) to get missing side a
-        a = round( ( c / np.sin(np.deg2rad(gamma)) ) * np.sin(np.deg2rad(alpha)), 2 )
-        return a 
+        # gamma = 180 - alpha - beta
+        # a = round( ( c / np.sin(np.deg2rad(gamma)) ) * np.sin(np.deg2rad(alpha)), 2 )
+        
+        # use law of sines (sinussatz) to get missing height
+
     
     def contour_is_unchanged(self, max_c:list)->bool:
         """Check if the contour has significantly changed for a while"""
@@ -250,7 +268,7 @@ class Scanner(Demo):
         if self.contour_is_unchanged(max_c): return
 
         # colors for better viewing
-        c = np.interp(z, [0, MAX_DEPTH_VALUE], [0, MAX_COLOR_VALUE])
+        c = np.interp(z, [5, MAX_DEPTH_VALUE], [5, MAX_COLOR_VALUE])
         blue = (0.3, 0.0, c)
         red = (c, 0.0, 0.3)
 
@@ -265,6 +283,9 @@ class Scanner(Demo):
         if len(contours) == 0: return
         # parse the contours into the right format
         cnts = np.vstack(contours).squeeze(1) 
+
+        # TODO remove the stick contour
+
         pts = cnts.astype(np.float64)
         pts3d = np.hstack([pts, np.full((pts.shape[0], 1), z_value)])
 
@@ -284,6 +305,14 @@ class Scanner(Demo):
         # NOTE: requires initialization with existing points (see: init_viz())
 
         self.vis.update_geometry(self.pcd)
+
+        # viewport options
+        if self.vis != None:
+            if self.cam == None:
+                self.cam = self.vis.get_view_control()
+            else:
+                self.vis.reset_view_point(True)
+        
         self.vis.poll_events()
         self.vis.update_renderer()
 
@@ -297,11 +326,8 @@ class Scanner(Demo):
         o3d.io.write_point_cloud(f"../Data/Models/cloud-{time.time()}.pcd", self.pcd)
 
 # ----- MAIN ----- #
-# video = "../Data/scan-test-diagonal1.mp4"
-# video = "../Data/scan4.mp4"
-# video = "../Data/scan3-cut.mp4"
-video = "../Data/scan-agar2.mp4"
-video = "../Data/nscan-3dball3.mp4"
-# video = "../Data/scan-boat.mp4"
+
+# video = "../Data/scan-3D-ball.mp4"
+video = "../Data/scan-agar-ball.mp4"
 player = Player(Scanner(), video)
 player.start_player()
