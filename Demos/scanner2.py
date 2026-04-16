@@ -148,7 +148,7 @@ class Scanner(Demo):
     def init_viz(self):
         """Init the real time view of the visualization window (requires initial points), if not yet done"""
         if not self.has_init_viz:
-            self.vis.create_window(height=740, width=1160)
+            self.vis.create_window(height=740, width=1160, left=500)
             self.vis.add_geometry(self.pcd)
             self.has_init_viz = True
 
