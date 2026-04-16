@@ -63,26 +63,23 @@ All demos use the same basic structure for playing and interacting with the foot
 4. Acrylic tank filled with water
 5. Ultrasound gel
 
-I used the *Philips Sono Diagnost R-1200* (SDR-1200) with the *LA 3510* probe (3.5 MHz). It has a lateral resolution (aka how far apart objects can be placed next to each other) or 1.6mm. A full view field of: 102x180 mm for the x1 zoom setting. Mostly I used the default x1.5 setting with 102x138mm. The machine returned 24.4 fps (1 focus point), 10.4 fps (2 focus points) or 5.1 fps (3 focus points, I never used that many). You'd likely also want to only use 1 or 2 focus point to not degrade performance too much, specifically for optical flow only 1 focus point is optimal.
+I used the *Philips Sono Diagnost R-1200* (SDR-1200) with the *LA 3510* probe (3.5 MHz). It has a lateral resolution (aka how far apart objects can be placed next to each other) of 1.6mm. A full view field of 102x180 mm for the x1 zoom setting. I mostly used the default x1.5 setting with 102x138mm. The machine returned 24.4 fps (1 focus point), 10.4 fps (2 focus points) or 5.1 fps (3 focus points). You'd likely also want to only use 1 or 2 focus point to not degrade performance too much, specifically for optical flow only 1 focus point is optimal.
 
 ![Diagram of the pipeline to get the demos working live](../Data/Images/pipeline.png)
 
+For every demo specific settings are noted, that worked well for me on the SDR1200.
+
 #### Workflow
 - Fill the acrylic tank with water and place the ultrasound probe against the side of it (use ultrasound gel as a coupling agent)
+  - Get some coarse sponges and jam them towards the back of the tank (this is done to scatter the sound waves and avoid refraction artifacts from the back wall, see: images below)
 - Get the video output of the ultrasound machine with a capture device
 - Capture with OBS
-  - Set the video to PAL_B
+  - Set the video to PAL_B  (or not, depends on your machine)
   - Start a virtual camera
 - Start the demos in python
   - Might have to change the `VIDEO_ID` in `Player.py` to match the virtual camera. Currently set to 2 
 
 ## Demo Overview
-<!-- Goals:
-- create demos that show off different abilities of ultrasound imaging
-- create demos to extend the usage of ultrasound imaging into HCI -->
-<!-- Top-Level explanation of Demos (why, what, how) -->
-<!-- "Nav" to the detailed README's + short summary + image -->
-<!-- Explain choices of detection method(s): why, how, expansion options, ... -->
 
 ### 1. 3D Scanner
 demo for: 3D reconstruction
@@ -92,6 +89,7 @@ The application can be used freehand or by utilizing a scan-bed-construction, th
 
 ![Example of the painter demo - scan-bed](../Data/Images/scanbed.jpg)
 
+A scan is done from only one side by lowering the object down into the water bath.
 Contours are extracted by using color quantization and then parsed and stacked into a point cloud.
 Due to the nature of ultrasound images, noise and artifacts can be difficult to fully avoid.
 For good results (see images below) a ultrasound agar phantom can be used. 
@@ -106,9 +104,21 @@ For further information and the original recipe see this [paper](https://doi.org
 The images below show the segmentation and resulting point cloud of a 3D scan with this demo.
 
 ![Example of the scanner demo - segmentation](../Data/Images/repo-scanner.png)
-![Example of the painter demo - point cloud](../Data/Images/repo-scanner2.png)
+![Example of the scanner demo - point cloud](../Data/Images/repo-scanner2.png)
 
+**Notes**
+- the applications works best using the scan bed construction
+  - requires updating the angle parameter
+- freehand scans are also possible
+  - this will stack the contour on top of each other at a default distance
+  - press <kbd>f</kbd> before starting a scan
+- Start/Stop scan with <kbd>Enter</kbd>
+  - When not freehand scanning, the scan will only start after the scan bed has passed through the image (to reduce noise)
+- Before scanning, it is useful to adjust the segmentation parameters
+  - press <kbd>d</kbd> (debug) to see it
+  - use <kbd>↑↓</kbd> to adjust
 
+- Good SDR1200 settings: *G48, N-10, F 0.0 // Focus: M(, F1)*
 
 ### 2. Painter
 demo for: depth values
@@ -120,24 +130,9 @@ Uses a simple threshold to segment the contours. Adjust to your needs.
 
 ![Example of the painter demo in action](../Data/Images/repo-painter.png)
 
-### 3. Deformable Interaction
-- `deformer.py`
+- Good SDR1200 settings: *G40 N30 F0.0 // Focus: M, F1*
 
-Demonstrates the use of a deformable material for interaction. Requires a stressball or similarly squishy material (tested with stress ball made out of TPE, anything else might require adjustments). Uses color quantization to segment the contour of the stressball from the background. Fits an ellipsis around the contour to get its major and minor axis, and use them to differentiate between squish and squash actions. They mimic right and left mouse clicks, respectively.
-The center of the balls contour is used to simulate mouse movement.
-
-![Example of the deformer demo in action](../Data/Images/repo-deformer.png)
-
-### 4. Water Flow
-- `flow.py`
-
-Uses air bubbles introduced to the water from movement to track the motion of the water flow. These bubbles are segmented using an adaptive threshold and the processed frames are used for optical flow calculation. 
-A ball is drawn over the frames, and the flow vectors are used to move it along the screen.
-
-![Example of the flow demo in action](../Data/Images/repo-flow.png)
-
-
-### 5. Reflection Visualization aka "Pong"
+### 3. Reflection Visualization aka "Pong"
 - `pong.py`
 
 Visualizes the way a single ultrasound reflection works by creating a pong-style game. A ball (the reflection) moves down the screen. If it comes into contract with a strong enough reflector (e.g. your finger), its reflected. 
@@ -147,3 +142,27 @@ The segmentation is done using color quantization and uses the incident path, re
 
 ![Example of the pong demo in action](../Data/Images/repo-pong.png)
 
+- Good SDR1200 settings: *G40 N30 F0.0 // Focus: M, F1*
+
+### 4. Deformable Interaction
+- `deformer.py`
+
+Demonstrates the use of a deformable material for interaction. Requires a stressball or similarly squishy material (tested with gel stress ball made out of TPE (probably), anything else might require adjustments). Uses color quantization to segment the contour of the stressball from the background. Fits an ellipsis around the contour to get its major and minor axis, and use them to differentiate between squish and squash actions. They mimic right and left mouse clicks, respectively.
+The center of the balls contour is used to simulate mouse movement.
+
+![Example of the deformer demo in action](../Data/Images/repo-deformer.png)
+
+Application is currently the most robust.
+
+- Good SDR1200 settings: *G60 N-10 F0.0 // Focus: M, F1*
+
+### 5. Water Flow
+- `flow.py`
+
+Uses air bubbles introduced to the water from movement to track the motion of the water flow. These bubbles are segmented using an adaptive threshold and the processed frames are used for optical flow calculation. 
+Agitate the water in a circular motion. Demo should work best after removing your hand and letting the water "settle into the motion" for a short time.
+A ball is drawn over the frames, and the flow vectors are used to move it along the screen.
+
+![Example of the flow demo in action](../Data/Images/repo-flow.png)
+
+- Good SDR1200 settings: *60 N-00 F0.0 // Focus: M* (only 1 focus for best fps)
