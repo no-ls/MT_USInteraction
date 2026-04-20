@@ -1,7 +1,7 @@
 # DEMOS
-- different Demos to show use cases of Ultrasound imaging in HCI
-- demos are build to work with provided Data
-- detection parameters can easily be adapted to fit different videos (TODO)
+- different demos to show use cases of Ultrasound imaging in HCI
+- demos are build to work with provided data
+- detection parameters can be adapted to fit different videos
 
 ## Usage
 

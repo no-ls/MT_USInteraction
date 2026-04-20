@@ -1,12 +1,10 @@
 import cv2
+import time
 import open3d as o3d
 import numpy as np
-import matplotlib.pyplot as plt
-from stl import mesh
-from mpl_toolkits import mplot3d
 from Helpers.Demo_Class import Demo
 from Helpers.Player import Player
-from Helpers.Parameters import COLORS, KEYS
+from Helpers.Parameters import COLORS
 from cv2.typing import MatLike
 
 """ 
@@ -15,6 +13,23 @@ using: Open3D https://pypi.org/project/open3d/
     -> surface reconstruction (see: https://www.open3d.org/html/tutorial/Advanced/surface_reconstruction.html)
 """
 PROBE_ARTIFACT = 30
+SCAN_STRIP_WIDTH = 100
+DEFAULT_Z_DISTANCE = 1 # default distance between two z values
+
+MAX_COLOR_VALUE = 1.0
+MAX_DEPTH_VALUE = 200
+
+SIZE_SCAN_BED = 40000
+MIN_SIZE_POST_BED = 30000
+BED_DURATION = 20 # how long the scan bed need to be visible for
+# Angle at of the diagonal measuring stick /_ 
+DIAGONAL_ANGLE = 30 # 45 # 28.6 # in degrees
+
+SCAN_STICK_THRESHOLD = 90
+MIN_GRID_WIDTH = 30
+MIN_STICK_CONTOUR_AREA = 200
+
+MIN_SIMILAR_SCORE = 20
 
 class Scanner(Demo):
     def __init__(self) -> None:
@@ -23,162 +38,254 @@ class Scanner(Demo):
         self.slider_max = 20
         self.pcds = []
         self.i = 1
-        self.started = False
+        self.start_scan = False
+        self.end_scan = False
+        self.is_scan_bed = False
+        self.was_scan_bed = False
+        self.bed_duration = 0
 
+        self.us_area_threshold = 37
+
+        self.has_init_viz = False
         self.vis = o3d.visualization.Visualizer()
         self.pcd = o3d.geometry.PointCloud()
+        self.cam = self.vis.get_view_control()
 
-        self.vis.create_window()
-        self.vis.add_geometry(self.pcd)
+        self.prev_z = 0
+        self.stick_contour = []
+        self.prev_max_c = []
+
+        self.similar_score = 0
+
+        self.do_freehand_scan = False
+
+    def start(self):
+        if not self.start_scan:
+            self.start_scan = True
+        elif self.start_scan:
+            self.start_scan = False
+            self.on_finished(None)
+
+    def free_key_interaction(self):
+        self.do_freehand_scan = True
+
+    # ---
 
     def do(self, frame:MatLike, masked:MatLike)-> MatLike:
         super().do(frame, masked)
+        # masked = cv2.pyrDown(masked)
 
+        base = masked.copy() # basic, unaltered masked frame
 
-        # TODO: get contours of left side get coordinate OF CENTER
-        # TODO: map y-pos(? aka height) to z-value of slice
+        # mask very top area (probe artifacts)
+        cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
+        contours, frame = self.segment(masked)
 
-        # HACK: zum (sehr!) groben ausprobieren
-
-        # black out everything that isn't the left side (or is annoying)
-        depth = masked.copy()
-        depth = cv2.rectangle(depth, (100, 0), (self.image_w,self.image_h), COLORS.BLACK, -1) # right side
-        depth = cv2.rectangle(depth, (0, 0), (self.image_w,200), COLORS.BLACK, -1) # top 
-        depth = cv2.rectangle(depth, (0, self.image_h-200), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
-
-        # find correct contour (sehr unflexibel)
-        depth = cv2.cvtColor(depth, cv2.COLOR_BGR2GRAY)
-        _, depth = cv2.threshold(depth, 70, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(depth, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-        depth = cv2.cvtColor(depth, cv2.COLOR_GRAY2BGR)
-        max_c = max(contours, key = cv2.contourArea)
-        max_area = cv2.contourArea(max_c)
-        if max_area > 700:
-            cv2.drawContours(depth, [max_c], -1, color=COLORS.RED, thickness=1)
-
-            # get y coordinate
-            M = cv2.moments(max_c)
-            if M['m00'] != 0:
-                cx = int(M['m10']/M['m00'])
-                cy = int(M['m01']/M['m00'])
-                cv2.circle(depth, (cx, cy), 7, (0, 0, 255), -1)
-
-                # PARSE y coordinate to depth
-                real_y = self.parse_y_to_mm(cy)
-                depth_value = self.calculate_depth(real_y)
-                frame = self.scan(masked, depth_value)    
-
-
-        # frame = depth # for out
-        # contours, frame = self.segment(masked)
-        # cv2.drawContours(frame, contours, -1, color=COLORS.RED, thickness=1)
-
-        # self.is_debug = True
-
-        # TODO redo (blocks performance)
-        """
-        # start the scanning process manually
-        key = cv2.waitKeyEx(25) # bad for performance
-        if key == KEYS.ENTER:
-            self.started = True
-            
-            # start the non-blocking visualization
-            self.vis.create_window()
-            self.vis.add_geometry(self.pcd)
-
-        # self.started = True # for testing
-
-        if not self.started:
-            self.write_text(frame, "Start scan with 'ENTER'", (20, 20))
+        if not self.start_scan:
+            self.write_text(frame, "Start scan with 'ENTER'", (20, 40))
+            if self.do_freehand_scan:
+                self.write_text(frame, "Do freehand scan", (20, 60))
+            else:
+                self.write_text(frame, "Press 'f' for freehand scan", (20, 60))
             return frame
-        """
-            
-        # frame = self.scan(masked)    
-        # self.write_text(frame, "scanning...", (20, 20))
 
-        return frame
+        # ----- PRE - SCAN ----- # 
+
+        if len(contours) == 0: return masked
+        max_c = max(contours, key=cv2.contourArea)
+        cv2.drawContours(masked, [max_c], -1, COLORS.BLUE, 1)
+
+        # ignore the scan bed (should fill out area), if it gets (reliably) detected
+        # x,y,w,h = cv2.boundingRect(max_c)
+        # if w > self.us_area.w - 50 and self.is_debug:
+            # cv2.rectangle(masked,(x,y),(x+w,y+h),COLORS.GREEN,1)
+            # self.write_text(masked, "ignoring scan bed", (20, 80))
+            # return masked
+        
+        # ----- SCAN - PROCESS ----- # 
+
+        # FREEHAND SCAN (i.e. !without! scan diagonals and calculated depth value)
+        if self.do_freehand_scan:
+            self.write_text(masked, "scanning (freehand)...", (20, 40))
+            self.parse_contours(base, contours, self.prev_z, max_c, True) # use unaltered frame
+            self.init_viz()
+            self.prev_z += 1
+
+            if len(max_c) > 0:
+                cv2.drawContours(masked, contours, -1, COLORS.RED, 1)   
+
+            return masked
+
+        # REGULAR SCAN (i.e. using scan diagonal to calculated depth value)
+
+        z = self.get_depth_value(base)
+
+        if z != None:
+            self.parse_contours(base, contours, z, max_c) # use unaltered frame
+            self.init_viz()
+            self.prev_z = z
+
+        # ----- (DEBUG) INFO ----- #
+        # always show contours it will be converting to point cloud
+        if len(max_c) > 0:
+            cv2.drawContours(masked, contours, -1, COLORS.RED, 1)
+
+        # always show contour of measuring stick
+        if len(self.stick_contour) > 0:
+                cv2.drawContours(masked, [self.stick_contour], -1, COLORS.GREEN, 1)
+
+        if self.is_debug:
+            if len(self.stick_contour) > 0:
+                cv2.drawContours(masked, [self.stick_contour], -1, COLORS.GREEN, 1)
+        self.write_text(masked, "scanning...", (20, 40))
+        self.write_text(masked, f"z = {z}", (20, 60))
+
+        if len(self.prev_max_c) == 0:
+            self.prev_max_c = max_c
+
+        return masked
     
-    def parse_y_to_mm(self, y):
-        """Takes a y-coordinate inside the US scan area and interpolates it to the real life position (in mm)"""
-        # x1 = 180, x15 = 130 # mm
-        real_h = 130 # mm
+    def init_viz(self):
+        """Init the real time view of the visualization window (requires initial points), if not yet done"""
+        if not self.has_init_viz:
+            self.vis.create_window(height=740, width=1160, left=500)
+            self.vis.add_geometry(self.pcd)
+            self.has_init_viz = True
 
-        # find position in US_AREA
-        us_y = y - self.us_area.y
-        return us_y 
-        # NOTE: keep it in image scale to keep same proportions as contours
+    def get_depth_value(self, masked:MatLike, is_left=True):
+        """Map y-coordinates on the left/right side of the image to a depth value"""
+        # NOTE: The scan bed has a diagonal measuring stick on the left and/or right side (going up/down)
+                # As the bed is lowered the stick will show up at a different y-value in the US image 
 
-        # map y coordinate to mm
-        real_y = round(np.interp(us_y, [0, self.us_area.h], [0, real_h]))
+        masked = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
 
-        # print(us_y, "->", real_y, "in mm")
-        return real_y
+        # HACK-y: blacks out any area where the stick isn't (adjust if needed) ↓
+        side = None
+        if is_left:
+            # black out the right side, so only the left side is left
+            left = masked.copy()
+            left = cv2.rectangle(left, (SCAN_STRIP_WIDTH, 0), (self.image_w, self.image_h), COLORS.BLACK, -1) # right side
+            left = cv2.rectangle(left, (0, 0), (self.image_w, 100), COLORS.BLACK, -1) # top 
+            # left = cv2.rectangle(left, (0, self.image_h-250), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
+            side = left
+        else: # right + reverse
+            right = masked.copy()
+            right = cv2.rectangle(right, (0, 0), (self.image_w-SCAN_STRIP_WIDTH, self.image_h), COLORS.BLACK, -1) # left side
+            right = cv2.rectangle(right, (self.image_w-200, 0), (self.image_w, 200), COLORS.BLACK, -1) # top 
+            right = cv2.rectangle(right, (0, self.image_h-250), (self.image_w,self.image_h), COLORS.BLACK, -1) # bottom
+            side = right
+    
+
+        # get the contours of the scan sticks
+        _, side = cv2.threshold(side, SCAN_STICK_THRESHOLD, 255, cv2.THRESH_BINARY)
+        stick_contours, _ = cv2.findContours(side, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        if len(stick_contours) == 0:
+            return self.prev_z + DEFAULT_Z_DISTANCE
+
+        # get the biggest contours
+        stick_max = max(stick_contours,   key=cv2.contourArea)
+        self.stick_contour = stick_max # for showing debug
+        stick_area = cv2.contourArea(stick_max)
+
+        cv2.drawContours(masked, [stick_max],-1, COLORS.PURPLE, 1)
+
+        # filter out contours that are too wide, and very small (h) (prop. scan bed)
+        sx,sy,sw,sh = cv2.boundingRect(stick_max)
+        if sw > sh:
+            s_diff = sw - sh
+            if s_diff > MIN_GRID_WIDTH:
+                print("z: got grid")
+                return # drop
+            
+        # if contours are big enough (to ignore noise) calculate z-value
+        z = 0
+        if stick_area > MIN_STICK_CONTOUR_AREA:  
+            y = self.get_center_Y(stick_max)
+            y = self.find_US_y(y, going_down=is_left)
+            z = self.calculate_depth(y)
+            # print("++ ", z)
+            return round(z, 2)
+        elif stick_area < MIN_STICK_CONTOUR_AREA:
+            if self.prev_z > 0:
+                # print("++ default z-value")
+                return self.prev_z + DEFAULT_Z_DISTANCE
+            else: return # drop
+
+    def get_center_Y(self, contour):
+        M = cv2.moments(contour)
+        if M['m00'] != 0:
+            cy = int(M['m01']/M['m00'])
+            return cy
+        return 0
+    
+    def find_US_y(self, y, going_down=True):
+        """Subtract the offset of the actual US scan area from the y coordinate"""
+        if not going_down: # diagonal coming from back/bottom
+            return self.us_area.h - y
+        
+        return y - self.us_area.y # diagonal coming from front/top
 
     def calculate_depth(self, y):
         """Use a (irl) y value to calculate the depth is represents (using triangulation)"""
-        alpha = 18 # degrees -> angle of between ground and irl diagonal |↗_|
-        beta = 90 # degrees (right angle)
-        c = y
-        a = 0 # result in ...?
+        alpha = DIAGONAL_ANGLE # degrees -> angle of between ground and irl diagonal |↗_|
+        c = y # hypotenuse
+        height = round( c * np.sin(np.deg2rad(alpha)), 2 )
+        return height
+        # beta = 90 # degrees (right angle)
+        # a = 0
 
         # get remaining angle
-        gamma = 180 - alpha - beta
-        # use law of sines (sinussatz) to get missing side a
-        a = round( ( c / np.sin(np.deg2rad(gamma)) ) * np.sin(np.deg2rad(alpha)), 2 )
+        # gamma = 180 - alpha - beta
+        # a = round( ( c / np.sin(np.deg2rad(gamma)) ) * np.sin(np.deg2rad(alpha)), 2 )
         
-        # normalize the value?
-        # print("Depth =",  a, "mm")
-        return a 
+        # use law of sines (sinussatz) to get missing height
+
     
-    def scan(self, masked:MatLike, z):
-        """Capsules the scanning behavior"""
+    def contour_is_unchanged(self, max_c:list)->bool:
+        """Check if the contour has significantly changed for a while"""
+        if len(self.prev_max_c) != 0:
+            ret = cv2.matchShapes(self.prev_max_c,max_c,1,0.0) # compare contours
+            if ret < 0.1:
+                self.similar_score += 1
+            else: 
+                self.prev_max_c = max_c # update
+                self.similar_score = 0
+            
+            if self.similar_score >= MIN_SIMILAR_SCORE:
+                print("contours too similar for too long -> skipping")
+                return True
+            else: False
+    
+    def parse_contours(self, masked:MatLike, contours, z, max_c, is_freehand=False):
+        """Convert the contours to 3d point clouds and stack them at different heights"""
 
-        # mask very top
-        cv2.rectangle(masked, (self.us_area.x, self.us_area.y), (self.us_area.x+self.us_area.w, self.us_area.y+PROBE_ARTIFACT), COLORS.BLACK, -1)
+        # skip if the z-value hasn't changed 
+        if self.prev_z == z and not is_freehand:
+            return # NOTE: freehand scan uses prev_z here before updating it later on
 
-        masked = cv2.pyrDown(masked)
-
-        # extract contours and coordinates
-        contours, frame = self.segment(masked)
-        cv2.drawContours(frame, contours, -1, color=COLORS.RED, thickness=1)
-
-        frame = cv2.pyrUp(frame)
-
-        # TODO: fix z-values -> try diagonal thingy
-        # TODO: update z-values with input: height
-        # TODO: scale point cloud to size
-
-        # move probe -> prob. many motion artifacts + difficult
-            # man kann eine z-Achsen Orientierung im Becken anbringen
-            # z.B. "Stab" diagonal "\" vorne/hinten anbringen um dann "position" in 2D cross section = tiefe
-        # move object -> prop. easier to do, but harder to implement
-            # but: how to tell z-indexes -> how big an object is
-            # z-index am Ende anpassen -> z.B.: manuelle Eingabe, wie hoch Objekt ist
-            # z.B.: mit Gehäuse (ähnlich wie oben)
-        # -> both options -> wenns kein Anhaltspunkt, dann kann man manuell eingeben oder default z-wert
-        
-        # stack a couple of contours at different z-levels (+ colors), then visualize
-        r = 1.0 / self.i * 10
-        # self.contours_to_3d(contours, self.i+2, (r, 0.0, 0.0))
+        # skip scanning once max contour stays the same for a while
+        if self.contour_is_unchanged(max_c): return
 
         # colors for better viewing
-        red = (1.0, 0.0, 0.0)
-        blue = (0.0, 0.0, 1.0)
+        c = np.interp(z, [5, MAX_DEPTH_VALUE], [5, MAX_COLOR_VALUE])
+        blue = (0.3, 0.0, c)
+        red = (c, 0.0, 0.3)
+
         if self.i % 2 == 0:
             self.contours_to_3d(contours, z, red)
-            # self.contours_to_3d(contours, self.i+2, red)
         else:
             self.contours_to_3d(contours, z, blue)
-            # self.contours_to_3d(contours, self.i+2, blue)
         self.i += 1
 
-        return frame
-
     def contours_to_3d(self, contours, z_value, color:np.array):
+        """Turn the OpenCV-contours into a usable format and add them to the Open3D point cloud"""
         if len(contours) == 0: return
-        # parse th contours into the right format
+        # parse the contours into the right format
         cnts = np.vstack(contours).squeeze(1) 
+
+        # TODO remove the stick contour
+
         pts = cnts.astype(np.float64)
         pts3d = np.hstack([pts, np.full((pts.shape[0], 1), z_value)])
 
@@ -190,57 +297,37 @@ class Scanner(Demo):
         self.pcd.points.extend(o3d.utility.Vector3dVector(pts3d))
         self.pcd.colors.extend(o3d.utility.Vector3dVector(colors)) # float64 (num_points, 3)
 
-        # self.update_visualization() # no work right now :/ (13.02)
+        self.update_visualization()
 
     def update_visualization(self):
         """using non-blocking visualization: https://www.open3d.org/docs/latest/tutorial/visualization/non_blocking_visualization.html"""
         # see for example: https://stackoverflow.com/a/74669788, https://stackoverflow.com/a/78009748
+        # NOTE: requires initialization with existing points (see: init_viz())
 
-        # print("pcd", self.pcd)
         self.vis.update_geometry(self.pcd)
+
+        # viewport options
+        if self.vis != None:
+            if self.cam == None:
+                self.cam = self.vis.get_view_control()
+            else:
+                self.vis.reset_view_point(True)
+        
         self.vis.poll_events()
         self.vis.update_renderer()
 
     def on_finished(self, frame):
-        # if not self.started:
-            # print("No scan :(")
-            # return
         print("[INFO] - Showing stacked point cloud")
         o3d.visualization.draw_geometries([self.pcd])
-        # self.save()
+        # self.save_point_cloud(frame)
 
-    def save(self):
-        # https://www.open3d.org/docs/release/tutorial/geometry/file_io.html#Point-cloud
-        # combine the point clouds
-        pcd = self.pcds[0]
-        i = 0
-        for cloud in self.pcds:
-            if i == 0: i +=1  # skip first
-            else:
-                pcd = pcd + cloud
-        # o3d.io.write_point_cloud("../Data/Models/cloud.pcd", pcd)
-
-    # NOTE: simple (static) working example -> rm later
-    def show_point_cloud(self, contours, z_value):
-        """visualizes the found contours as a point could by using the o3d viewer"""
-
-        cnts = np.vstack(contours).squeeze(1) 
-        pts = cnts.astype(np.float64)
-        pts3d = np.hstack([pts, np.full((pts.shape[0], 1), z_value)])
-        color = np.array((1.0, 0.0, 0.0)) # red
-        N = pts3d.shape[0]
-        colors = np.tile(color, (N, 1))
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pts3d)
-        pcd.colors = o3d.utility.Vector3dVector(colors) # float64 (num_points, 3)
-        o3d.visualization.draw_geometries([pcd])
-
-
-# NOTE: visualize a single slice with plt see: https://stackoverflow.com/questions/76626930/how-do-i-give-the-contours-read-in-opencv-to-matplotlib-for-display
+    def save_point_cloud(self, frame):  
+        print("saving to: ../Data/Models/cloud-{time.time()}.pcd")   
+        o3d.io.write_point_cloud(f"../Data/Models/cloud-{time.time()}.pcd", self.pcd)
 
 # ----- MAIN ----- #
-# video = "../Data/scan1.mp4"
-video = "../Data/scan-test-diagonal1.mp4"
+
+# video = "../Data/scan-3D-ball.mp4"
+video = "../Data/scan-agar-ball.mp4"
 player = Player(Scanner(), video)
 player.start_player()
